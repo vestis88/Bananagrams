@@ -1,0 +1,1373 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+<meta name="theme-color" content="#0f3b34"/>
+<title>Bananfläta</title>
+<style>html,body{margin:0;padding:0;height:100%;background:#0f3b34;overscroll-behavior:none;}#root{height:100%;}</style>
+<script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js" crossorigin></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js" crossorigin></script>
+<script src="https://www.gstatic.com/firebasejs/12.15.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.15.0/firebase-database-compat.js"></script>
+<script>
+/* =========================================================================
+   FIREBASE-KONFIG — klistra in din egen här ELLER gör det i appen
+   ("Anslut Firebase"). Hämtas i Firebase-konsolen: Projektinställningar →
+   Dina appar → Webb (</>). Aktivera Realtime Database (testläge) först.
+   ========================================================================= */
+window.__FIREBASE_CONFIG__ = {
+  apiKey: "AIzaSyDUAahPvQ0K_mSV4oyEWsNpNxQbbPwsgO8",
+  authDomain: "nejdebrings-bananagrams.firebaseapp.com",
+  databaseURL: "https://nejdebrings-bananagrams-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId: "nejdebrings-bananagrams",
+  storageBucket: "nejdebrings-bananagrams.firebasestorage.app",
+  messagingSenderId: "911449650387",
+  appId: "1:911449650387:web:f3791f8fc7c583cdc1d026",
+  measurementId: "G-1MFKVZCBMH"
+};
+</script>
+</head>
+<body>
+<div id="root"></div>
+<script>
+const { useState, useEffect, useRef, useCallback, useMemo } = React;
+const CSS = `
+:root{
+  --filt:#0f3b34; --filt2:#0b2e29; --kram:#f6efe0; --kram-skug:#d8cdb4;
+  --bly:#1d2b2a; --banan:#f4c430; --banan-m:#e2a800; --skala:#7bbf6a;
+  --banan-mogen:#f0a93a; --dump:#6d5b46; --fara:#d8603e; --dim:#8aa39c;
+  --rad:14px;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+.bf-root{
+  position:fixed;inset:0;overflow:hidden;
+  font-family:ui-rounded,"SF Pro Rounded","Nunito",-apple-system,"Segoe UI",system-ui,sans-serif;
+  color:var(--kram);background:radial-gradient(120% 120% at 50% -10%,#155049 0%,var(--filt) 45%,var(--filt2) 100%);
+  display:flex;flex-direction:column;
+  padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  -webkit-user-select:none;user-select:none;touch-action:none;
+}
+.bf-wrap{max-width:480px;width:100%;margin:0 auto;flex:1;display:flex;flex-direction:column;min-height:0;position:relative;}
+.bf-h1{font-weight:800;letter-spacing:.5px;}
+.bf-banana-logo{font-size:13px;font-weight:800;letter-spacing:3px;color:var(--banan);text-transform:uppercase;}
+button{font-family:inherit;cursor:pointer;border:none;}
+.bf-card{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.08);border-radius:var(--rad);}
+.bf-btn{border-radius:12px;font-weight:800;font-size:16px;padding:14px 16px;color:var(--bly);background:var(--banan);
+  box-shadow:0 3px 0 var(--banan-m);transition:transform .05s,box-shadow .05s;}
+.bf-btn:active{transform:translateY(2px);box-shadow:0 1px 0 var(--banan-m);}
+.bf-btn.ghost{background:transparent;color:var(--kram);border:1.5px solid rgba(255,255,255,.25);box-shadow:none;}
+.bf-btn.ghost:active{transform:translateY(1px);background:rgba(255,255,255,.06);}
+.bf-btn:disabled{opacity:.4;box-shadow:none;cursor:not-allowed;transform:none;}
+.bf-input{width:100%;background:rgba(0,0,0,.22);border:1.5px solid rgba(255,255,255,.14);border-radius:12px;
+  color:var(--kram);font-size:17px;padding:14px 16px;font-family:inherit;text-align:center;font-weight:700;letter-spacing:1px;}
+.bf-input:focus{outline:none;border-color:var(--banan);}
+.bf-scroll{overflow-y:auto;-webkit-overflow-scrolling:touch;touch-action:pan-y;}
+
+/* Brickor */
+.tile{
+  background:linear-gradient(180deg,#fffdf6,var(--kram));
+  color:var(--bly);border-radius:9px;display:flex;align-items:center;justify-content:center;
+  font-weight:800;position:relative;
+  box-shadow:0 2px 3px rgba(0,0,0,.32),inset 0 1px 0 rgba(255,255,255,.9),inset 0 -2px 0 var(--kram-skug);
+}
+.tile .sub{position:absolute;right:3px;bottom:1px;font-size:8px;font-weight:800;opacity:.4;}
+.tile.sel{outline:3px solid var(--banan);outline-offset:1px;}
+.tile.bad{box-shadow:0 0 0 2px var(--fara),0 2px 3px rgba(0,0,0,.3);}
+.tile.ghost{position:fixed;z-index:90;pointer-events:none;opacity:.92;transform:translate(-50%,-50%) scale(1.06);}
+
+/* Topprad */
+.bf-top{display:flex;align-items:center;gap:8px;padding:8px 12px;}
+.bf-pill{background:rgba(0,0,0,.25);border-radius:999px;padding:5px 11px;font-size:12px;font-weight:800;display:flex;align-items:center;gap:5px;}
+.bf-players{display:flex;gap:6px;overflow-x:auto;padding:2px 12px 8px;touch-action:pan-x;}
+.bf-pcard{flex:0 0 auto;background:rgba(0,0,0,.22);border-radius:10px;padding:6px 9px;min-width:64px;text-align:center;border:1.5px solid transparent;}
+.bf-pcard.done{border-color:var(--skala);}
+.bf-pcard.you{border-color:var(--banan);}
+.bf-pcard.rutten{opacity:.45;}
+.bf-pname{font-size:11px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:74px;}
+.bf-pcount{font-size:17px;font-weight:800;}
+.bf-pcount.dim{color:var(--dim);font-size:12px;}
+
+/* Br\xE4de */
+.bf-boardwrap{flex:1;min-height:0;position:relative;overflow:hidden;background:
+  radial-gradient(100% 60% at 50% 100%,rgba(0,0,0,.25),transparent);}
+.bf-board{position:absolute;top:0;left:0;transform-origin:0 0;will-change:transform;}
+.bf-cellgrid{position:absolute;inset:0;background-size:var(--cell) var(--cell);
+  background-image:linear-gradient(rgba(255,255,255,.05) 1px,transparent 1px),
+                   linear-gradient(90deg,rgba(255,255,255,.05) 1px,transparent 1px);}
+.bf-zoom{position:absolute;right:10px;bottom:10px;display:flex;flex-direction:column;gap:6px;z-index:8;}
+.bf-zoom button{width:42px;height:42px;border-radius:11px;background:rgba(0,0,0,.4);color:#fff;font-size:22px;font-weight:800;
+  border:1px solid rgba(255,255,255,.12);}
+.bf-hint{position:absolute;top:10px;left:0;right:0;text-align:center;font-size:12px;color:var(--dim);pointer-events:none;}
+
+/* Hylla + knappar */
+.bf-dock{padding:8px 10px calc(8px + env(safe-area-inset-bottom));background:linear-gradient(180deg,transparent,rgba(0,0,0,.32));}
+.bf-rack{display:flex;gap:6px;overflow-x:auto;padding:6px 2px;min-height:54px;align-items:center;touch-action:pan-x;}
+.bf-rack.empty{justify-content:center;color:var(--dim);font-weight:700;font-size:13px;}
+.bf-toolrow{display:flex;gap:6px;margin-top:6px;}
+.bf-tool{flex:1;border-radius:11px;background:rgba(255,255,255,.08);color:var(--kram);font-weight:800;font-size:12px;padding:9px 4px;border:1px solid rgba(255,255,255,.1);}
+.bf-tool:active{background:rgba(255,255,255,.16);}
+.bf-actions{display:flex;gap:8px;margin-top:8px;}
+.bf-skala{flex:2;border-radius:13px;font-weight:900;font-size:18px;padding:15px;color:#10301a;background:var(--skala);box-shadow:0 3px 0 #4f9a40;letter-spacing:1px;}
+.bf-skala:active{transform:translateY(2px);box-shadow:0 1px 0 #4f9a40;}
+.bf-banan{flex:2;border-radius:13px;font-weight:900;font-size:18px;padding:15px;color:#3a2400;background:var(--banan-mogen);box-shadow:0 3px 0 #c47e1f;letter-spacing:1px;}
+.bf-banan:active{transform:translateY(2px);box-shadow:0 1px 0 #c47e1f;}
+.bf-dumpbtn{flex:1;border-radius:13px;font-weight:800;font-size:14px;padding:15px 6px;color:var(--kram);background:var(--dump);box-shadow:0 3px 0 #4c4031;}
+.bf-dumpbtn:active{transform:translateY(2px);box-shadow:0 1px 0 #4c4031;}
+.bf-actions button:disabled{opacity:.35;box-shadow:none;transform:none;}
+
+/* Overlay */
+.bf-ov{position:absolute;inset:0;z-index:40;display:flex;align-items:center;justify-content:center;
+  background:rgba(7,24,21,.82);backdrop-filter:blur(3px);padding:18px;}
+.bf-ovcard{background:var(--filt);border:1px solid rgba(255,255,255,.12);border-radius:18px;padding:20px;width:100%;max-width:380px;
+  box-shadow:0 20px 60px rgba(0,0,0,.5);max-height:90%;display:flex;flex-direction:column;}
+.bf-count{font-size:96px;font-weight:900;color:var(--banan);text-align:center;line-height:1;}
+.bf-flash{position:absolute;top:64px;left:0;right:0;display:flex;justify-content:center;z-index:30;pointer-events:none;}
+.bf-flash .msg{background:rgba(0,0,0,.6);border:1px solid rgba(255,255,255,.14);border-radius:999px;padding:8px 16px;font-weight:800;font-size:14px;
+  animation:pop .3s ease;}
+@keyframes pop{from{transform:scale(.8);opacity:0;}to{transform:scale(1);opacity:1;}}
+
+.bf-disttbl{display:grid;grid-template-columns:repeat(4,1fr);gap:3px 8px;font-size:12px;font-weight:700;font-variant-numeric:tabular-nums;}
+.bf-disttbl .vow{color:var(--banan);}
+.bf-lbrow{display:flex;align-items:center;gap:10px;padding:9px 4px;border-bottom:1px solid rgba(255,255,255,.07);}
+.bf-rank{width:26px;font-weight:900;color:var(--banan);text-align:center;}
+.bf-mini{font-size:12px;color:var(--dim);}
+.bf-ready{display:flex;align-items:center;gap:8px;font-weight:800;}
+@media (max-height:680px){.bf-count{font-size:72px;}}
+`;
+const DISTRIBUTION = {
+  A: 13,
+  B: 2,
+  C: 2,
+  D: 7,
+  E: 14,
+  F: 3,
+  G: 4,
+  H: 3,
+  I: 8,
+  J: 1,
+  K: 5,
+  L: 8,
+  M: 5,
+  N: 12,
+  O: 6,
+  P: 3,
+  R: 12,
+  S: 9,
+  T: 11,
+  U: 3,
+  V: 3,
+  X: 1,
+  Y: 1,
+  "\xC5": 2,
+  "\xC4": 4,
+  "\xD6": 2
+};
+const ALPHABET = Object.keys(DISTRIBUTION);
+const VOWELS = /* @__PURE__ */ new Set(["A", "E", "I", "O", "U", "Y", "\xC5", "\xC4", "\xD6"]);
+const MAX_PLAYERS = 8;
+const TOTAL_TILES = Object.values(DISTRIBUTION).reduce((a, b) => a + b, 0);
+function buildBag() {
+  const b = [];
+  for (const [l, c] of Object.entries(DISTRIBUTION)) for (let i = 0; i < c; i++) b.push(l);
+  return b;
+}
+function shuffle(arr) {
+  const a = arr.slice();
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+function startingTiles(n) {
+  if (n <= 4) return 21;
+  if (n <= 6) return 15;
+  return 11;
+}
+function cellMap(placed) {
+  const m = /* @__PURE__ */ new Map();
+  for (const t of placed) m.set(t.r + "," + t.c, t.letter);
+  return m;
+}
+function isConnected(placed) {
+  if (placed.length === 0) return false;
+  if (placed.length === 1) return true;
+  const m = cellMap(placed);
+  const seen = /* @__PURE__ */ new Set();
+  const start = placed[0].r + "," + placed[0].c;
+  const stack = [start];
+  seen.add(start);
+  while (stack.length) {
+    const cur = stack.pop();
+    const [r, c] = cur.split(",").map(Number);
+    for (const [dr, dc] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const k = r + dr + "," + (c + dc);
+      if (m.has(k) && !seen.has(k)) {
+        seen.add(k);
+        stack.push(k);
+      }
+    }
+  }
+  return seen.size === placed.length;
+}
+function extractWords(placed) {
+  const m = cellMap(placed);
+  const words = [];
+  for (const t of placed) {
+    const { r, c } = t;
+    if (!m.has(r + "," + (c - 1)) && m.has(r + "," + (c + 1))) {
+      let w = "", cc = c;
+      while (m.has(r + "," + cc)) {
+        w += m.get(r + "," + cc);
+        cc++;
+      }
+      words.push(w);
+    }
+    if (!m.has(r - 1 + "," + c) && m.has(r + 1 + "," + c)) {
+      let w = "", rr = r;
+      while (m.has(rr + "," + c)) {
+        w += m.get(rr + "," + c);
+        rr++;
+      }
+      words.push(w);
+    }
+  }
+  return words;
+}
+function gridValid(placed, rackCount) {
+  if (rackCount > 0) return { ok: false, why: "Du har brickor kvar i hyllan" };
+  if (placed.length < 2) return { ok: false, why: "L\xE4gg ut minst ett ord" };
+  if (!isConnected(placed)) return { ok: false, why: "Alla brickor m\xE5ste h\xE4nga ihop" };
+  const m = cellMap(placed);
+  for (const t of placed) {
+    const { r, c } = t;
+    const h = m.has(r + "," + (c - 1)) || m.has(r + "," + (c + 1));
+    const v = m.has(r - 1 + "," + c) || m.has(r + 1 + "," + c);
+    if (!h && !v) return { ok: false, why: "En bricka st\xE5r ensam" };
+  }
+  return { ok: true, words: extractWords(placed) };
+}
+function loadFirebaseConfig() {
+  try {
+    if (window.__FIREBASE_CONFIG__ && window.__FIREBASE_CONFIG__.databaseURL && !String(window.__FIREBASE_CONFIG__.databaseURL).includes("KLISTRA"))
+      return window.__FIREBASE_CONFIG__;
+    const s = localStorage.getItem("bf_fbconfig");
+    if (s) {
+      const c = JSON.parse(s);
+      if (c && c.databaseURL) return c;
+    }
+  } catch (e) {
+  }
+  return null;
+}
+let _db = null, _fbErr = "", _serverOffset = 0;
+function initFirebase(cfg) {
+  try {
+    if (!window.firebase) {
+      _fbErr = "Firebase-skriptet laddades inte";
+      return false;
+    }
+    if (!firebase.apps || !firebase.apps.length) firebase.initializeApp(cfg);
+    _db = firebase.database();
+    _fbErr = "";
+    try {
+      _db.ref(".info/serverTimeOffset").on("value", (s) => {
+        const v = s.val();
+        if (typeof v === "number") _serverOffset = v;
+      });
+    } catch (e) {
+    }
+    return true;
+  } catch (e) {
+    _fbErr = String(e && e.message || e);
+    return false;
+  }
+}
+const fbReady = () => !!_db;
+const dbRef = (path) => _db.ref(path);
+async function fbSet(path, val) {
+  try {
+    await dbRef(path).set(val);
+    return true;
+  } catch (e) {
+    _fbErr = String(e && e.message || e);
+    return false;
+  }
+}
+async function fbUpdate(path, val) {
+  try {
+    await dbRef(path).update(val);
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+async function fbOnce(path) {
+  try {
+    const s = await dbRef(path).once("value");
+    return s.val();
+  } catch (e) {
+    return null;
+  }
+}
+function fbOn(path, cb) {
+  const r = dbRef(path);
+  const h = r.on("value", (s) => cb(s.val()));
+  return () => r.off("value", h);
+}
+function fbOnConnected(cb) {
+  const r = dbRef(".info/connected");
+  const h = r.on("value", (s) => {
+    if (s.val() === true) cb();
+  });
+  return () => r.off("value", h);
+}
+const now = () => Date.now() + _serverOffset;
+const uid = () => Math.random().toString(36).slice(2, 10);
+function roomCode() {
+  const c = "ACDEFGHJKLMNPQRSTUVWXY3479";
+  let s = "";
+  for (let i = 0; i < 4; i++) s += c[Math.floor(Math.random() * c.length)];
+  return s;
+}
+const GAME_PATH = (code) => `rooms/${code}/game`;
+const PLAYERS_PATH = (code) => `rooms/${code}/players`;
+const PLAYER_PATH = (code, pid) => `rooms/${code}/players/${pid}`;
+const LB_PATH = "leaderboard";
+const HEARTBEAT_STALE = 8e3, HOST_STALE = 6500, COUNTDOWN_MS = 3200, VERIFY_MS = 7e4;
+const HOST_TICK = 220;
+function hostStep(game, players) {
+  let win = null;
+  game.roster = game.roster || {};
+  game.deals = game.deals || {};
+  game.dealSeq = game.dealSeq || {};
+  game.ackSeq = game.ackSeq || {};
+  game.verdicts = game.verdicts || {};
+  game.bag = game.bag || [];
+  players = players || {};
+  const present = (p) => p && p.present && now() - (p.ts || 0) < HEARTBEAT_STALE && !p.left;
+  const activeIds = Object.keys(players).filter((id) => {
+    const r = game.roster[id];
+    return present(players[id]) && !(r && r.rotten);
+  });
+  for (const id of Object.keys(players)) {
+    const p = players[id];
+    if (!p) continue;
+    const r = game.roster[id] || (game.roster[id] = { name: p.name, present: false, finished: false, tileCount: 0, rotten: false, ready: false });
+    r.name = p.name;
+    r.present = present(p);
+    r.finished = !!p.finished;
+    r.tileCount = p.tileCount || 0;
+    r.ready = !!p.ready;
+    if (game.ackSeq[id] === void 0) game.ackSeq[id] = 0;
+    if (game.dealSeq[id] === void 0) game.dealSeq[id] = 0;
+    if (!game.deals[id]) game.deals[id] = [];
+    game.deals[id] = game.deals[id].filter((d) => d.seq > (p.drawnSeq || 0));
+  }
+  const activeCount = activeIds.length;
+  const dealTo = (id, letters) => {
+    game.dealSeq[id] = (game.dealSeq[id] || 0) + 1;
+    game.deals[id].push({ seq: game.dealSeq[id], letters });
+  };
+  for (const id of Object.keys(players)) {
+    const p = players[id];
+    if (!p || !p.reqs) continue;
+    const reqs = p.reqs.filter((q) => q.seq > (game.ackSeq[id] || 0)).sort((a, b) => a.seq - b.seq);
+    for (const q of reqs) {
+      game.ackSeq[id] = q.seq;
+      if (q.type === "peel") {
+        if (game.phase === "playing" && game.bag.length >= activeCount && activeCount > 0) {
+          for (const aid of activeIds) {
+            const t = game.bag.shift();
+            if (t !== void 0) dealTo(aid, [t]);
+          }
+          game.peelCount++;
+          game.event = { id: uid(), type: "skala", by: id, name: p.name, ts: now() };
+        }
+      } else if (q.type === "dump") {
+        if (game.phase === "playing" && game.bag.length >= 3 && q.letter) {
+          game.bag.push(q.letter);
+          game.bag = shuffle(game.bag);
+          dealTo(id, [game.bag.shift(), game.bag.shift(), game.bag.shift()]);
+          game.event = { id: uid(), type: "dumpa", by: id, name: p.name, ts: now() };
+        }
+      } else if (q.type === "bananas") {
+        if (game.phase === "playing" && game.bag.length < activeCount && q.board) {
+          game.phase = "verifying";
+          game.winnerId = id;
+          game.verifyName = p.name;
+          game.verifyBoard = q.board;
+          game.verdicts = {};
+          game.verifyEnd = now() + VERIFY_MS;
+          game.event = { id: uid(), type: "banan", by: id, name: p.name, ts: now() };
+        }
+      } else if (q.type === "verdict") {
+        if (game.phase === "verifying" && id !== game.winnerId) game.verdicts[id] = q.ok ? "ok" : "rotten";
+      }
+    }
+  }
+  if (game.phase === "lobby") {
+    const readyActive = activeIds.filter((id) => players[id] && players[id].ready);
+    if (activeCount >= 2 && readyActive.length === activeCount) {
+      game.phase = "countdown";
+      game.countdownEnd = now() + COUNTDOWN_MS;
+      game.numPlayers = activeCount;
+      game.bag = shuffle(buildBag());
+      game.startIds = activeIds.slice();
+    }
+  } else if (game.phase === "countdown") {
+    if (now() >= game.countdownEnd) {
+      game.phase = "playing";
+      game.startedAt = now();
+      const per = startingTiles(game.numPlayers || activeCount);
+      for (const id of game.startIds || activeIds) {
+        dealTo(id, game.bag.splice(0, per));
+      }
+      game.event = { id: uid(), type: "start", ts: now() };
+    }
+  } else if (game.phase === "verifying") {
+    const voters = activeIds.filter((id) => id !== game.winnerId);
+    const votes = voters.map((id) => game.verdicts[id]).filter(Boolean);
+    const anyRotten = votes.includes("rotten");
+    const allVoted = voters.length > 0 && votes.length === voters.length;
+    if (anyRotten) {
+      const board = game.verifyBoard;
+      if (board && board.cells) {
+        for (const c of board.cells) game.bag.push(c.l);
+        game.bag = shuffle(game.bag);
+      }
+      if (game.roster[game.winnerId]) game.roster[game.winnerId].rotten = true;
+      game.event = { id: uid(), type: "rutten", by: game.winnerId, name: game.verifyName, ts: now() };
+      game.phase = "playing";
+      game.winnerId = null;
+      game.verifyBoard = null;
+      game.verdicts = {};
+    } else if (allVoted || now() >= game.verifyEnd) {
+      game.phase = "finished";
+      game.lastWinnerName = game.verifyName;
+      win = { name: game.verifyName };
+      game.event = { id: uid(), type: "vinst", name: game.verifyName, ts: now() };
+    }
+  }
+  game.bagCount = game.bag.length;
+  game.activeCount = activeCount;
+  for (const id of Object.keys(game.roster)) game.roster[id].host = id === game.hostId;
+  game.v = (game.v || 0) + 1;
+  return { game, win };
+}
+async function bumpLeaderboard(name) {
+  if (!name || !fbReady()) return;
+  const key = (name.trim().toLowerCase() || "x").replace(/[.#$/\[\]]/g, "_");
+  try {
+    await dbRef(`${LB_PATH}/${key}`).transaction((cur) => {
+      if (!cur) return { name: name.trim(), wins: 1, ts: now() };
+      return { name: name.trim(), wins: (cur.wins || 0) + 1, ts: now() };
+    });
+  } catch (e) {
+  }
+}
+function Tile({ letter, size = 40, selected, bad, onPointerDown, style }) {
+  return /* @__PURE__ */ React.createElement(
+    "div",
+    {
+      className: "tile" + (selected ? " sel" : "") + (bad ? " bad" : ""),
+      "data-tile": "1",
+      onPointerDown,
+      style: { width: size, height: size, fontSize: Math.round(size * 0.46), ...style }
+    },
+    letter
+  );
+}
+const GRID = 80, CELL = 42, CENTER = Math.floor(GRID / 2);
+function Board({ placed, selected, onPlaceAt, onPickTile, viewRef }) {
+  const wrapRef = useRef(null);
+  const [view, setView] = useState({ x: 0, y: 0, scale: 1 });
+  const stateRef = useRef({ pointers: /* @__PURE__ */ new Map(), drag: null, pan: null, pinch: null });
+  const [ghost, setGhost] = useState(null);
+  const initd = useRef(false);
+  useEffect(() => {
+    viewRef.current = { view, setView };
+  });
+  useEffect(() => {
+    if (initd.current || !wrapRef.current) return;
+    initd.current = true;
+    const r = wrapRef.current.getBoundingClientRect();
+    setView({ scale: 1, x: r.width / 2 - CENTER * CELL - CELL / 2, y: r.height / 2 - CENTER * CELL - CELL / 2 });
+  }, []);
+  const clientToCell = useCallback((cx, cy) => {
+    const r = wrapRef.current.getBoundingClientRect();
+    const lx = (cx - r.left - view.x) / view.scale, ly = (cy - r.top - view.y) / view.scale;
+    return { r: Math.floor(ly / CELL), c: Math.floor(lx / CELL) };
+  }, [view]);
+  const onDown = useCallback((e) => {
+    const st = stateRef.current;
+    wrapRef.current.setPointerCapture(e.pointerId);
+    st.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (st.pointers.size === 2) {
+      st.drag = null;
+      st.pan = null;
+      const pts = [...st.pointers.values()];
+      const dist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+      st.pinch = { startDist: dist, startScale: view.scale, cx: (pts[0].x + pts[1].x) / 2, cy: (pts[0].y + pts[1].y) / 2, view: { ...view } };
+      return;
+    }
+    const tileEl = e.target.closest && e.target.closest("[data-tile]");
+    if (tileEl && tileEl.dataset.r !== void 0) {
+      const r = +tileEl.dataset.r, c = +tileEl.dataset.c;
+      st.drag = { r, c, letter: tileEl.dataset.letter, sx: e.clientX, sy: e.clientY, moved: false };
+    } else {
+      st.pan = { sx: e.clientX, sy: e.clientY, vx: view.x, vy: view.y };
+    }
+  }, [view]);
+  const onMove = useCallback((e) => {
+    const st = stateRef.current;
+    if (st.pointers.has(e.pointerId)) st.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (st.pinch && st.pointers.size >= 2) {
+      const pts = [...st.pointers.values()];
+      const dist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+      let sc = Math.max(0.45, Math.min(2.4, st.pinch.startScale * dist / st.pinch.startDist));
+      const r = wrapRef.current.getBoundingClientRect();
+      const ax = st.pinch.cx - r.left, ay = st.pinch.cy - r.top;
+      const k = sc / st.pinch.view.scale;
+      setView({ scale: sc, x: ax - (ax - st.pinch.view.x) * k, y: ay - (ay - st.pinch.view.y) * k });
+      return;
+    }
+    if (st.drag) {
+      if (Math.abs(e.clientX - st.drag.sx) + Math.abs(e.clientY - st.drag.sy) > 6) st.drag.moved = true;
+      if (st.drag.moved) setGhost({ letter: st.drag.letter, x: e.clientX, y: e.clientY });
+      return;
+    }
+    if (st.pan) {
+      setView((v) => ({ ...v, x: st.pan.vx + (e.clientX - st.pan.sx), y: st.pan.vy + (e.clientY - st.pan.sy) }));
+    }
+  }, []);
+  const onUp = useCallback((e) => {
+    const st = stateRef.current;
+    try {
+      wrapRef.current.releasePointerCapture(e.pointerId);
+    } catch (_) {
+    }
+    if (st.drag) {
+      if (st.drag.moved) {
+        const { r, c } = clientToCell(e.clientX, e.clientY);
+        onPickTile(st.drag.r, st.drag.c, r, c);
+      } else {
+        onPickTile(st.drag.r, st.drag.c, null, null);
+      }
+      st.drag = null;
+      setGhost(null);
+    }
+    st.pan = null;
+    st.pointers.delete(e.pointerId);
+    if (st.pointers.size < 2) st.pinch = null;
+  }, [clientToCell, onPickTile]);
+  const onClickEmpty = useCallback((e) => {
+    const st = stateRef.current;
+    if (st.drag || st.pan) return;
+    const tileEl = e.target.closest && e.target.closest("[data-tile]");
+    if (tileEl) return;
+    if (selected) {
+      const { r, c } = clientToCell(e.clientX, e.clientY);
+      onPlaceAt(r, c);
+    }
+  }, [selected, clientToCell, onPlaceAt]);
+  const zoom = (f) => {
+    const r = wrapRef.current.getBoundingClientRect();
+    const ax = r.width / 2, ay = r.height / 2;
+    setView((v) => {
+      const sc = Math.max(0.45, Math.min(2.4, v.scale * f));
+      const k = sc / v.scale;
+      return { scale: sc, x: ax - (ax - v.x) * k, y: ay - (ay - v.y) * k };
+    });
+  };
+  return /* @__PURE__ */ React.createElement(
+    "div",
+    {
+      className: "bf-boardwrap",
+      ref: wrapRef,
+      onPointerDown: onDown,
+      onPointerMove: onMove,
+      onPointerUp: onUp,
+      onPointerCancel: onUp,
+      onClick: onClickEmpty
+    },
+    /* @__PURE__ */ React.createElement("div", { className: "bf-board", style: { transform: `translate(${view.x}px,${view.y}px) scale(${view.scale})` } }, /* @__PURE__ */ React.createElement("div", { className: "bf-cellgrid", style: { width: GRID * CELL, height: GRID * CELL, "--cell": CELL + "px" } }), placed.map((t) => /* @__PURE__ */ React.createElement(
+      "div",
+      {
+        key: t.id,
+        "data-tile": "1",
+        "data-r": t.r,
+        "data-c": t.c,
+        "data-letter": t.letter,
+        className: "tile" + (selected && selected.from === "board" && selected.id === t.id ? " sel" : ""),
+        style: { position: "absolute", left: t.c * CELL + 2, top: t.r * CELL + 2, width: CELL - 4, height: CELL - 4, fontSize: Math.round(CELL * 0.46) }
+      },
+      t.letter
+    ))),
+    /* @__PURE__ */ React.createElement("div", { className: "bf-zoom" }, /* @__PURE__ */ React.createElement("button", { onClick: () => zoom(1.2) }, "+"), /* @__PURE__ */ React.createElement("button", { onClick: () => zoom(1 / 1.2) }, "\u2212")),
+    placed.length === 0 && /* @__PURE__ */ React.createElement("div", { className: "bf-hint" }, "Tryck p\xE5 en bricka i hyllan, tryck sen h\xE4r f\xF6r att placera. Dra med ett finger f\xF6r att panorera."),
+    ghost && /* @__PURE__ */ React.createElement("div", { className: "tile ghost", style: { left: ghost.x, top: ghost.y, width: CELL - 4, height: CELL - 4, fontSize: Math.round(CELL * 0.46) } }, ghost.letter)
+  );
+}
+function Countdown({ endsAt }) {
+  const [n, setN] = useState(Math.ceil((endsAt - now()) / 1e3));
+  useEffect(() => {
+    const t = setInterval(() => setN(Math.max(0, Math.ceil((endsAt - now()) / 1e3))), 100);
+    return () => clearInterval(t);
+  }, [endsAt]);
+  return /* @__PURE__ */ React.createElement("div", { className: "bf-ov" }, /* @__PURE__ */ React.createElement("div", { style: { textAlign: "center" } }, /* @__PURE__ */ React.createElement("div", { className: "bf-banana-logo" }, "G\xF6r er redo"), /* @__PURE__ */ React.createElement("div", { className: "bf-count" }, n > 0 ? n : "K\xD6R!"), /* @__PURE__ */ React.createElement("div", { className: "bf-mini" }, "Brickorna delas ut och v\xE4nds samtidigt")));
+}
+function Leaderboard({ entries }) {
+  const rows = Object.values(entries || {}).sort((a, b) => b.wins - a.wins).slice(0, 12);
+  if (rows.length === 0) return /* @__PURE__ */ React.createElement("div", { className: "bf-mini", style: { textAlign: "center", padding: "12px" } }, "Inga toppbananer \xE4n. Vinn en omg\xE5ng!");
+  return /* @__PURE__ */ React.createElement("div", null, rows.map((e, i) => /* @__PURE__ */ React.createElement("div", { className: "bf-lbrow", key: i }, /* @__PURE__ */ React.createElement("div", { className: "bf-rank" }, i === 0 ? "\u{1F34C}" : i + 1), /* @__PURE__ */ React.createElement("div", { style: { flex: 1, fontWeight: 800 } }, e.name), /* @__PURE__ */ React.createElement("div", { style: { fontWeight: 900, color: "var(--banan)" } }, e.wins), /* @__PURE__ */ React.createElement("div", { className: "bf-mini" }, e.wins === 1 ? "vinst" : "vinster"))));
+}
+function Home({ onSolo, onCreate, onJoin, lb, onShowRules, sharedOK, joinErr, onConfig }) {
+  const [name, setName] = useState(() => localStorageName());
+  const [code, setCode] = useState("");
+  const [tab, setTab] = useState("start");
+  const [testMsg, setTestMsg] = useState("");
+  const save = (n) => {
+    setName(n);
+    try {
+      sessionStorage;
+    } catch (_) {
+    }
+  };
+  const runTest = async () => {
+    setTestMsg("Testar\u2026");
+    if (!fbReady()) {
+      setTestMsg("Firebase \xE4r inte ansluten. Kontrollera din config (knappen nedan).");
+      return;
+    }
+    const val = { t: now(), r: Math.random() };
+    const ok1 = await fbSet("selftest/ping", val);
+    const back = await fbOnce("selftest/ping");
+    if (ok1 && back && back.r === val.r) setTestMsg("Firebase svarar \u2713 \u2014 realtidssynk fungerar. Skapa ett rum och g\xE5 med fr\xE5n andra telefonen.");
+    else setTestMsg("Kunde inte skriva/l\xE4sa mot Firebase. Kolla databasreglerna (l\xE4s/skriv).");
+  };
+  return /* @__PURE__ */ React.createElement("div", { className: "bf-wrap bf-scroll", style: { padding: "22px 16px" } }, /* @__PURE__ */ React.createElement("div", { style: { textAlign: "center", marginBottom: 18 } }, /* @__PURE__ */ React.createElement("div", { className: "bf-banana-logo" }, "\u{1F34C} ordspel"), /* @__PURE__ */ React.createElement("div", { className: "bf-h1", style: { fontSize: 40, marginTop: 4 } }, "Bananfl\xE4ta"), /* @__PURE__ */ React.createElement("div", { className: "bf-mini", style: { marginTop: 6 } }, "Bygg din ordfl\xE4ta snabbast. 1\u20138 spelare. Svenska brickor.")), /* @__PURE__ */ React.createElement("div", { className: "bf-card", style: { padding: 16, marginBottom: 14 } }, /* @__PURE__ */ React.createElement("label", { className: "bf-mini", style: { display: "block", marginBottom: 6, fontWeight: 800 } }, "Ditt namn (till topplistan)"), /* @__PURE__ */ React.createElement(
+    "input",
+    {
+      className: "bf-input",
+      value: name,
+      maxLength: 14,
+      placeholder: "Skriv ditt namn",
+      onChange: (e) => save(e.target.value)
+    }
+  )), /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: 8, marginBottom: 12 } }, /* @__PURE__ */ React.createElement("button", { className: "bf-tool", style: tab === "start" ? { background: "var(--banan)", color: "#222" } : {}, onClick: () => setTab("start") }, "Spela online"), /* @__PURE__ */ React.createElement("button", { className: "bf-tool", style: tab === "solo" ? { background: "var(--banan)", color: "#222" } : {}, onClick: () => setTab("solo") }, "\xD6va sj\xE4lv")), tab === "start" ? /* @__PURE__ */ React.createElement("div", { className: "bf-card", style: { padding: 16 } }, !sharedOK && /* @__PURE__ */ React.createElement("div", { className: "bf-mini", style: { color: "var(--fara)", marginBottom: 10, fontWeight: 700 } }, 'Firebase \xE4r inte ansluten \xE4n \u2014 online kr\xE4ver det. Tryck "Anslut Firebase" nedan och klistra in din config. \xD6va sj\xE4lv fungerar utan.'), /* @__PURE__ */ React.createElement(
+    "button",
+    {
+      className: "bf-btn",
+      style: { width: "100%", marginBottom: 10 },
+      disabled: !name.trim() || !sharedOK,
+      onClick: () => onCreate(name.trim())
+    },
+    "Skapa rum"
+  ), /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: 8 } }, /* @__PURE__ */ React.createElement(
+    "input",
+    {
+      className: "bf-input",
+      value: code,
+      maxLength: 4,
+      placeholder: "KOD",
+      onChange: (e) => setCode(e.target.value.toUpperCase()),
+      style: { flex: 1 }
+    }
+  ), /* @__PURE__ */ React.createElement(
+    "button",
+    {
+      className: "bf-btn ghost",
+      disabled: !name.trim() || code.length < 4 || !sharedOK,
+      onClick: () => onJoin(name.trim(), code.trim().toUpperCase()),
+      style: { flex: "0 0 auto" }
+    },
+    "G\xE5 med"
+  )), joinErr && /* @__PURE__ */ React.createElement("div", { className: "bf-mini", style: { color: "var(--fara)", marginTop: 10, fontWeight: 700 } }, joinErr), /* @__PURE__ */ React.createElement("div", { className: "bf-mini", style: { marginTop: 10, textAlign: "center" } }, "Dela rumskoden med dina medspelare s\xE5 g\xE5r de med p\xE5 sina egna telefoner."), /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: 8, marginTop: 10 } }, /* @__PURE__ */ React.createElement("button", { className: "bf-tool", style: { flex: 1 }, onClick: onConfig }, sharedOK ? "Firebase \u2713 (\xE4ndra)" : "Anslut Firebase"), /* @__PURE__ */ React.createElement("button", { className: "bf-tool", style: { flex: 1 }, onClick: runTest }, "Testa anslutning")), testMsg && /* @__PURE__ */ React.createElement("div", { className: "bf-mini", style: { marginTop: 8 } }, testMsg)) : /* @__PURE__ */ React.createElement("div", { className: "bf-card", style: { padding: 16 } }, /* @__PURE__ */ React.createElement("div", { className: "bf-mini", style: { marginBottom: 10 } }, "Patiens: anv\xE4nd alla 144 brickorna i en enda sammanh\xE4ngande ordfl\xE4ta. Bra f\xF6r att \xF6va br\xE4det."), /* @__PURE__ */ React.createElement("button", { className: "bf-btn", style: { width: "100%" }, disabled: !name.trim(), onClick: () => onSolo(name.trim()) }, "Starta patiens")), /* @__PURE__ */ React.createElement("div", { className: "bf-card", style: { padding: 16, marginTop: 14 } }, /* @__PURE__ */ React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 } }, /* @__PURE__ */ React.createElement("div", { style: { fontWeight: 800 } }, "\u{1F3C6} Topplista"), /* @__PURE__ */ React.createElement("button", { className: "bf-tool", style: { flex: "0 0 auto" }, onClick: onShowRules }, "Regler & brickor")), /* @__PURE__ */ React.createElement(Leaderboard, { entries: lb })));
+}
+function localStorageName() {
+  return "";
+}
+function ConfigModal({ onClose, onSaved }) {
+  const [txt, setTxt] = useState(() => {
+    try {
+      const s = localStorage.getItem("bf_fbconfig");
+      return s ? JSON.stringify(JSON.parse(s), null, 2) : "";
+    } catch (e) {
+      return "";
+    }
+  });
+  const [msg, setMsg] = useState("");
+  const save = () => {
+    let cfg = null;
+    let t = txt.trim();
+    const m = t.match(/\{[\s\S]*\}/);
+    if (m) t = m[0];
+    try {
+      cfg = JSON.parse(t);
+    } catch (_) {
+      try {
+        cfg = Function("return (" + t + ")")();
+      } catch (e) {
+        setMsg("Kunde inte tolka. Klistra in hela firebaseConfig-objektet.");
+        return;
+      }
+    }
+    if (!cfg || !cfg.databaseURL) {
+      setMsg("Saknar databaseURL. Aktivera Realtime Database och kopiera config-objektet.");
+      return;
+    }
+    try {
+      localStorage.setItem("bf_fbconfig", JSON.stringify(cfg));
+    } catch (e) {
+    }
+    const ok = initFirebase(cfg);
+    if (ok) {
+      setMsg("Ansluten \u2713");
+      onSaved && onSaved();
+      setTimeout(onClose, 500);
+    } else setMsg("Fel vid anslutning: " + _fbErr);
+  };
+  return /* @__PURE__ */ React.createElement("div", { className: "bf-ov" }, /* @__PURE__ */ React.createElement("div", { className: "bf-ovcard bf-scroll" }, /* @__PURE__ */ React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center" } }, /* @__PURE__ */ React.createElement("div", { className: "bf-h1", style: { fontSize: 20 } }, "Anslut Firebase"), /* @__PURE__ */ React.createElement("button", { className: "bf-tool", style: { flex: "0 0 auto" }, onClick: onClose }, "St\xE4ng")), /* @__PURE__ */ React.createElement("ol", { style: { fontSize: 13, lineHeight: 1.5, paddingLeft: 18, marginTop: 8 } }, /* @__PURE__ */ React.createElement("li", null, "Skapa ett gratisprojekt p\xE5 console.firebase.google.com"), /* @__PURE__ */ React.createElement("li", null, "Bygg \u2192 ", /* @__PURE__ */ React.createElement("b", null, "Realtime Database"), " \u2192 Skapa databas \u2192 starta i ", /* @__PURE__ */ React.createElement("b", null, "testl\xE4ge")), /* @__PURE__ */ React.createElement("li", null, "Projektinst\xE4llningar \u2192 Dina appar \u2192 Webb (</>) \u2192 kopiera ", /* @__PURE__ */ React.createElement("b", null, "firebaseConfig")), /* @__PURE__ */ React.createElement("li", null, "Klistra in objektet h\xE4r nedan")), /* @__PURE__ */ React.createElement(
+    "textarea",
+    {
+      className: "bf-input",
+      style: { height: 150, textAlign: "left", fontFamily: "monospace", fontSize: 12, letterSpacing: 0 },
+      value: txt,
+      onChange: (e) => setTxt(e.target.value),
+      placeholder: '{\n  "apiKey": "\u2026",\n  "authDomain": "\u2026",\n  "databaseURL": "https://\u2026firebasedatabase.app",\n  "projectId": "\u2026",\n  "appId": "\u2026"\n}'
+    }
+  ), msg && /* @__PURE__ */ React.createElement("div", { className: "bf-mini", style: { marginTop: 8, color: msg.includes("\u2713") ? "var(--skala)" : "var(--fara)" } }, msg), /* @__PURE__ */ React.createElement("button", { className: "bf-btn", style: { width: "100%", marginTop: 12 }, onClick: save }, "Spara & anslut"), /* @__PURE__ */ React.createElement("div", { className: "bf-mini", style: { marginTop: 8 } }, "Configen sparas bara p\xE5 den h\xE4r enheten. B\xE5da telefonerna beh\xF6ver samma config (samma projekt).")));
+}
+function Rules({ onClose }) {
+  const dist = Object.entries(DISTRIBUTION);
+  return /* @__PURE__ */ React.createElement("div", { className: "bf-ov" }, /* @__PURE__ */ React.createElement("div", { className: "bf-ovcard bf-scroll" }, /* @__PURE__ */ React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center" } }, /* @__PURE__ */ React.createElement("div", { className: "bf-h1", style: { fontSize: 22 } }, "S\xE5 spelar du"), /* @__PURE__ */ React.createElement("button", { className: "bf-tool", style: { flex: "0 0 auto" }, onClick: onClose }, "St\xE4ng")), /* @__PURE__ */ React.createElement("ol", { style: { fontSize: 14, lineHeight: 1.5, paddingLeft: 18, marginTop: 10 } }, /* @__PURE__ */ React.createElement("li", null, "Alla markerar ", /* @__PURE__ */ React.createElement("b", null, "Redo"), ". N\xE4r alla \xE4r redo startar en gemensam nedr\xE4kning och brickorna delas ut samtidigt."), /* @__PURE__ */ React.createElement("li", null, "Bygg en sammanh\xE4ngande ordfl\xE4ta (v\xE5gr\xE4tt/lodr\xE4tt) av alla dina brickor."), /* @__PURE__ */ React.createElement("li", null, "Klar med alla brickor och klasen r\xE4cker? Tryck ", /* @__PURE__ */ React.createElement("b", { style: { color: "var(--skala)" } }, "SKALA"), " \u2014 d\xE5 drar ", /* @__PURE__ */ React.createElement("i", null, "alla"), " en ny bricka."), /* @__PURE__ */ React.createElement("li", null, "Sitter du fast p\xE5 en bokstav? V\xE4lj brickan och tryck ", /* @__PURE__ */ React.createElement("b", null, "DUMPA"), " \u2014 l\xE4gg tillbaka 1, dra 3 nya."), /* @__PURE__ */ React.createElement("li", null, "N\xE4r klasen har f\xE4rre brickor \xE4n antal spelare och du blir klar: tryck ", /* @__PURE__ */ React.createElement("b", { style: { color: "var(--banan-mogen)" } }, "BANAN!")), /* @__PURE__ */ React.createElement("li", null, "De andra granskar din fl\xE4ta. Fel ord \u2192 ", /* @__PURE__ */ React.createElement("b", null, "Rutten banan"), ", dina brickor \xE5ter i klasen och \xF6vriga spelar vidare. Allt r\xE4tt \u2192 du blir ", /* @__PURE__ */ React.createElement("b", null, "Toppbanan"), ".")), /* @__PURE__ */ React.createElement("div", { style: { fontWeight: 800, marginTop: 14, marginBottom: 6 } }, "Startbrickor"), /* @__PURE__ */ React.createElement("div", { className: "bf-mini" }, "2\u20134 spelare: 21 \xB7 5\u20136 spelare: 15 \xB7 7\u20138 spelare: 11 \xB7 patiens: alla 144"), /* @__PURE__ */ React.createElement("div", { style: { fontWeight: 800, marginTop: 14, marginBottom: 8 } }, "Bokstavsf\xF6rdelning (officiell svensk, ", TOTAL_TILES, " brickor)"), /* @__PURE__ */ React.createElement("div", { className: "bf-disttbl" }, dist.map(([l, n]) => /* @__PURE__ */ React.createElement("div", { key: l, className: VOWELS.has(l) ? "vow" : "" }, l, " = ", n))), /* @__PURE__ */ React.createElement("div", { className: "bf-mini", style: { marginTop: 8 } }, "Q, W och Z ing\xE5r inte i svenska utg\xE5van. Vokaler i gult.")));
+}
+function Lobby({ code, roster, meId, ready, onReady, onLeave, onShowRules, sharedOK, diag, isHost }) {
+  const list = Object.entries(roster || {}).filter(([id, r]) => r.present);
+  const allReady = list.length >= 2 && list.every(([id, r]) => r.ready);
+  return /* @__PURE__ */ React.createElement("div", { className: "bf-wrap bf-scroll", style: { padding: "18px 16px" } }, /* @__PURE__ */ React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 } }, /* @__PURE__ */ React.createElement("button", { className: "bf-tool", style: { flex: "0 0 auto" }, onClick: onLeave }, "\u2190 L\xE4mna"), /* @__PURE__ */ React.createElement("div", { className: "bf-banana-logo" }, "V\xE4ntrum"), /* @__PURE__ */ React.createElement("button", { className: "bf-tool", style: { flex: "0 0 auto" }, onClick: onShowRules }, "Regler")), /* @__PURE__ */ React.createElement("div", { className: "bf-card", style: { padding: 18, textAlign: "center", marginBottom: 14 } }, /* @__PURE__ */ React.createElement("div", { className: "bf-mini" }, "Rumskod \u2014 dela med dina medspelare"), /* @__PURE__ */ React.createElement("div", { style: { fontSize: 46, fontWeight: 900, letterSpacing: 8, color: "var(--banan)" } }, code)), /* @__PURE__ */ React.createElement("div", { className: "bf-card", style: { padding: 14, marginBottom: 14 } }, /* @__PURE__ */ React.createElement("div", { style: { fontWeight: 800, marginBottom: 8 } }, "Spelare (", list.length, "/", MAX_PLAYERS, ")"), list.map(([id, r]) => /* @__PURE__ */ React.createElement("div", { key: id, className: "bf-ready", style: { padding: "7px 2px", borderBottom: "1px solid rgba(255,255,255,.06)" } }, /* @__PURE__ */ React.createElement("span", { style: { flex: 1 } }, r.name, id === meId ? " (du)" : "", r.host ? " \u{1F451}" : ""), /* @__PURE__ */ React.createElement("span", { style: { color: r.ready ? "var(--skala)" : "var(--dim)", fontWeight: 800, fontSize: 13 } }, r.ready ? "\u2713 Redo" : "v\xE4ntar"))), list.length < 2 && /* @__PURE__ */ React.createElement("div", { className: "bf-mini", style: { marginTop: 8 } }, "Minst 2 spelare beh\xF6vs f\xF6r att starta.")), /* @__PURE__ */ React.createElement(
+    "button",
+    {
+      className: "bf-btn",
+      style: { width: "100%", background: ready ? "var(--skala)" : "var(--banan)", boxShadow: ready ? "0 3px 0 #4f9a40" : void 0 },
+      onClick: onReady
+    },
+    ready ? "\u2713 Du \xE4r redo (tryck f\xF6r att \xE5ngra)" : "Jag \xE4r redo"
+  ), allReady && /* @__PURE__ */ React.createElement("div", { className: "bf-mini", style: { textAlign: "center", marginTop: 10 } }, "Alla redo \u2014 nedr\xE4kningen startar\u2026"), /* @__PURE__ */ React.createElement("div", { className: "bf-mini", style: { textAlign: "center", marginTop: 14, opacity: 0.7 } }, sharedOK ? "Firebase: ansluten" : "Firebase: EJ ansluten", " \xB7 synliga spelare: ", diag ? diag.seen : list.length, " \xB7 ", isHost ? "du \xE4r v\xE4rd" : "ansluten", diag && diag.err ? ` \xB7 fel: ${diag.err}` : ""), sharedOK && list.length < 2 && /* @__PURE__ */ React.createElement("div", { className: "bf-mini", style: { textAlign: "center", marginTop: 6, color: "var(--banan-mogen)" } }, "V\xE4ntar p\xE5 fler spelare\u2026 Be din medspelare \xF6ppna samma sida och skriva koden ovan."));
+}
+function VerifyOverlay({ game, meId, onVote, amWinner }) {
+  const board = game.verifyBoard;
+  if (!board) return null;
+  const words = board.words || [];
+  const rs = board.cells.map((c) => c.r), cs = board.cells.map((c) => c.c);
+  const minR = Math.min(...rs), minC = Math.min(...cs), maxR = Math.max(...rs), maxC = Math.max(...cs);
+  const w = maxC - minC + 1, h = maxR - minR + 1;
+  const cell = Math.max(14, Math.min(26, Math.floor(300 / Math.max(w, h))));
+  return /* @__PURE__ */ React.createElement("div", { className: "bf-ov" }, /* @__PURE__ */ React.createElement("div", { className: "bf-ovcard bf-scroll" }, /* @__PURE__ */ React.createElement("div", { className: "bf-h1", style: { fontSize: 22, textAlign: "center" } }, "\u{1F34C} ", game.verifyName, " ropar BANAN!"), /* @__PURE__ */ React.createElement("div", { className: "bf-mini", style: { textAlign: "center", marginBottom: 12 } }, 'Granska fl\xE4tan. Felstavat, egennamn eller f\xF6rkortning? R\xF6sta "Rutten".'), /* @__PURE__ */ React.createElement("div", { style: { position: "relative", width: w * cell, height: h * cell, margin: "0 auto 12px" } }, board.cells.map((c, i) => /* @__PURE__ */ React.createElement("div", { key: i, className: "tile", style: { position: "absolute", left: (c.c - minC) * cell, top: (c.r - minR) * cell, width: cell - 2, height: cell - 2, fontSize: Math.round(cell * 0.5) } }, c.l))), /* @__PURE__ */ React.createElement("div", { className: "bf-mini", style: { textAlign: "center", marginBottom: 12 } }, "Ord: ", words.join(" \xB7 ") || "\u2014"), amWinner ? /* @__PURE__ */ React.createElement("div", { className: "bf-mini", style: { textAlign: "center" } }, "De andra granskar din fl\xE4ta\u2026") : game.verdicts[meId] ? /* @__PURE__ */ React.createElement("div", { className: "bf-mini", style: { textAlign: "center" } }, "Din r\xF6st: ", game.verdicts[meId] === "ok" ? "Godk\xE4nd \u2713" : "Rutten \u2717", " \u2014 v\xE4ntar p\xE5 \xF6vriga\u2026") : /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: 8 } }, /* @__PURE__ */ React.createElement("button", { className: "bf-skala", style: { flex: 1 }, onClick: () => onVote(true) }, "Godk\xE4nn"), /* @__PURE__ */ React.createElement("button", { className: "bf-dumpbtn", style: { flex: 1, background: "var(--fara)", boxShadow: "0 3px 0 #a23f23" }, onClick: () => onVote(false) }, "Rutten banan"))));
+}
+function Results({ game, meId, lb, onAgain, onHome, amHost }) {
+  const won = game.lastWinnerName;
+  return /* @__PURE__ */ React.createElement("div", { className: "bf-ov" }, /* @__PURE__ */ React.createElement("div", { className: "bf-ovcard bf-scroll" }, /* @__PURE__ */ React.createElement("div", { style: { textAlign: "center" } }, /* @__PURE__ */ React.createElement("div", { style: { fontSize: 54 } }, "\u{1F34C}"), /* @__PURE__ */ React.createElement("div", { className: "bf-h1", style: { fontSize: 26 } }, "Toppbanan: ", won), /* @__PURE__ */ React.createElement("div", { className: "bf-mini", style: { marginTop: 4 } }, "Omg\xE5ngen \xE4r slut")), /* @__PURE__ */ React.createElement("div", { style: { fontWeight: 800, margin: "16px 0 4px" } }, "\u{1F3C6} Topplista"), /* @__PURE__ */ React.createElement(Leaderboard, { entries: lb }), /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: 8, marginTop: 16 } }, amHost && /* @__PURE__ */ React.createElement("button", { className: "bf-btn", style: { flex: 1 }, onClick: onAgain }, "Spela igen"), /* @__PURE__ */ React.createElement("button", { className: "bf-btn ghost", style: { flex: 1 }, onClick: onHome }, "Till start")), !amHost && /* @__PURE__ */ React.createElement("div", { className: "bf-mini", style: { textAlign: "center", marginTop: 10 } }, "V\xE4rden kan starta en ny omg\xE5ng.")));
+}
+function App() {
+  const [screen, setScreen] = useState("home");
+  const [mode, setMode] = useState(null);
+  const meRef = useRef({ id: uid(), name: "" });
+  const [code, setCode] = useState("");
+  const [isHost, setIsHost] = useState(false);
+  const [game, setGame] = useState(null);
+  const [lb, setLb] = useState({});
+  const [showRules, setShowRules] = useState(false);
+  const [rack, setRack] = useState([]);
+  const [placed, setPlaced] = useState([]);
+  const [selected, setSelected] = useState(null);
+  const [ready, setReady] = useState(false);
+  const [flash, setFlash] = useState(null);
+  const viewRef = useRef({});
+  const drawnSeqRef = useRef(0);
+  const reqSeqRef = useRef(0);
+  const reqsRef = useRef([]);
+  const soloBagRef = useRef(null);
+  const lastEventRef = useRef(null);
+  const [joinErr, setJoinErr] = useState("");
+  const [diag, setDiag] = useState({ seen: 0, err: "" });
+  const [showConfig, setShowConfig] = useState(false);
+  const [fbOk, setFbOk] = useState(() => {
+    const c = loadFirebaseConfig();
+    return c ? initFirebase(c) : false;
+  });
+  const gameUnsubRef = useRef(null);
+  const playersUnsubRef = useRef(null);
+  const connUnsubRef = useRef(null);
+  const hostTimerRef = useRef(null);
+  const playersRef = useRef({});
+  const hostGameRef = useRef(null);
+  const refreshLb = useCallback(() => {
+    if (!fbReady()) {
+      setLb({});
+      return;
+    }
+    fbOnce(LB_PATH).then((v) => setLb(v || {}));
+  }, []);
+  useEffect(() => {
+    if (!fbReady()) return;
+    const off = fbOn(LB_PATH, (v) => setLb(v || {}));
+    return off;
+  }, [fbOk]);
+  const valid = useMemo(() => gridValid(placed, rack.length), [placed, rack.length]);
+  const myActive = game ? game.activeCount || 0 : 1;
+  const bagCount = game ? game.bagCount ?? 0 : soloBagRef.current ? soloBagRef.current.length : 0;
+  const canSkala = valid.ok && bagCount >= (mode === "solo" ? 1 : myActive) && game && game.phase === "playing";
+  const canBanan = valid.ok && bagCount < (mode === "solo" ? 1 : myActive) && game && game.phase === "playing";
+  const tilesFromLetters = (letters) => letters.map((l) => ({ id: uid(), letter: l }));
+  const addToRack = useCallback((letters) => {
+    setRack((r) => [...r, ...tilesFromLetters(letters)]);
+  }, []);
+  const selectRack = (t) => setSelected((s) => s && s.from === "rack" && s.id === t.id ? null : { from: "rack", id: t.id, letter: t.letter });
+  const placeAt = (r, c) => {
+    if (!selected) return;
+    if (placed.some((p) => p.r === r && p.c === c)) return;
+    if (selected.from === "rack") {
+      setRack((rk) => rk.filter((x) => x.id !== selected.id));
+      setPlaced((p) => [...p, { id: selected.id, r, c, letter: selected.letter }]);
+    } else {
+      setPlaced((p) => p.map((x) => x.id === selected.id ? { ...x, r, c } : x));
+    }
+    setSelected(null);
+  };
+  const pickTile = (r, c, tr, tc) => {
+    const t = placed.find((p) => p.r === r && p.c === c);
+    if (!t) return;
+    if (tr == null) {
+      setPlaced((p) => p.filter((x) => x.id !== t.id));
+      setRack((rk) => [...rk, { id: t.id, letter: t.letter }]);
+      setSelected(null);
+    } else {
+      if (placed.some((p) => p.r === tr && p.c === tc && p.id !== t.id)) return;
+      setPlaced((p) => p.map((x) => x.id === t.id ? { ...x, r: tr, c: tc } : x));
+    }
+  };
+  const recallAll = () => {
+    setRack((rk) => [...rk, ...placed.map((p) => ({ id: p.id, letter: p.letter }))]);
+    setPlaced([]);
+    setSelected(null);
+  };
+  const shuffleRack = () => setRack((rk) => shuffle(rk));
+  const pushReq = useCallback((req) => {
+    reqSeqRef.current++;
+    reqsRef.current.push({ seq: reqSeqRef.current, ...req });
+    if (reqsRef.current.length > 40) reqsRef.current = reqsRef.current.slice(-40);
+  }, []);
+  const startSolo = (name) => {
+    meRef.current = { id: uid(), name };
+    soloBagRef.current = shuffle(buildBag());
+    drawnSeqRef.current = 0;
+    const start = soloBagRef.current.splice(0, startingTiles(1));
+    setRack(tilesFromLetters(start));
+    setPlaced([]);
+    setSelected(null);
+    setMode("solo");
+    setGame({ phase: "playing", mode: "solo", bagCount: soloBagRef.current.length, activeCount: 1, peelCount: 0, roster: {} });
+    setScreen("game");
+  };
+  const soloPeel = () => {
+    const b = soloBagRef.current;
+    if (b.length >= 1) {
+      const t = b.shift();
+      addToRack([t]);
+      setGame((g) => ({ ...g, bagCount: b.length, peelCount: (g.peelCount || 0) + 1 }));
+      doFlash("Ny bricka!");
+    }
+  };
+  const soloDump = (letter, tileId, from) => {
+    const b = soloBagRef.current;
+    if (b.length < 3) return;
+    b.push(letter);
+    const sb = shuffle(b);
+    b.length = 0;
+    b.push(...sb);
+    if (from === "rack") setRack((rk) => rk.filter((x) => x.id !== tileId));
+    else {
+      setPlaced((p) => p.filter((x) => x.id !== tileId));
+    }
+    addToRack([b.shift(), b.shift(), b.shift()]);
+    setSelected(null);
+    setGame((g) => ({ ...g, bagCount: b.length }));
+    doFlash("Dumpade 1, drog 3");
+  };
+  const soloBanan = async () => {
+    const v = gridValid(placed, rack.length);
+    if (!v.ok) return;
+    setGame((g) => ({ ...g, phase: "finished", lastWinnerName: meRef.current.name }));
+    await bumpLeaderboard(meRef.current.name);
+    refreshLb();
+  };
+  const codeRef = useRef("");
+  useEffect(() => {
+    codeRef.current = code;
+  }, [code]);
+  const publishPlayer = useCallback(async (extra = {}) => {
+    if (mode !== "online") return;
+    const c = codeRef.current, me = meRef.current;
+    if (!c || !fbReady()) return;
+    const board = extra.board || null;
+    await fbSet(PLAYER_PATH(c, me.id), {
+      id: me.id,
+      name: me.name,
+      present: true,
+      ts: now(),
+      ready: extra.ready !== void 0 ? extra.ready : ready,
+      tileCount: rack.length,
+      finished: gridValid(placed, rack.length).ok,
+      drawnSeq: drawnSeqRef.current,
+      reqs: reqsRef.current,
+      board
+    });
+  }, [mode, ready, rack, placed]);
+  const publishRef = useRef(publishPlayer);
+  publishRef.current = publishPlayer;
+  const lastWriteRef = useRef({ sig: "", ts: 0 });
+  const hostRecompute = useCallback(() => {
+    const c = codeRef.current, me = meRef.current;
+    if (!c || !fbReady() || !hostGameRef.current) return;
+    const base = JSON.parse(JSON.stringify(hostGameRef.current));
+    base.hostId = me.id;
+    base.hostName = me.name;
+    base.hostTs = now();
+    const { game: ng, win } = hostStep(base, playersRef.current || {});
+    hostGameRef.current = ng;
+    const { hostTs, ...rest } = ng;
+    const sig = JSON.stringify(rest);
+    const t = now();
+    if (sig !== lastWriteRef.current.sig || t - lastWriteRef.current.ts > 1500) {
+      lastWriteRef.current = { sig, ts: t };
+      fbSet(GAME_PATH(c), ng);
+      setGame(ng);
+      setDiag({ seen: Object.values(ng.roster || {}).filter((r) => r.present).length, err: "" });
+      if (win) bumpLeaderboard(win.name);
+    }
+  }, []);
+  const hostRecomputeRef = useRef(hostRecompute);
+  hostRecomputeRef.current = hostRecompute;
+  const becomeHost = useCallback(() => {
+    const c = codeRef.current;
+    setIsHost(true);
+    if (playersUnsubRef.current) playersUnsubRef.current();
+    playersUnsubRef.current = fbOn(PLAYERS_PATH(c), (pm) => {
+      playersRef.current = pm || {};
+      hostRecomputeRef.current();
+    });
+    if (hostTimerRef.current) clearInterval(hostTimerRef.current);
+    hostTimerRef.current = setInterval(() => hostRecomputeRef.current(), HOST_TICK);
+  }, []);
+  const becomeHostRef = useRef(becomeHost);
+  becomeHostRef.current = becomeHost;
+  const stepDownHost = useCallback(() => {
+    if (playersUnsubRef.current) {
+      playersUnsubRef.current();
+      playersUnsubRef.current = null;
+    }
+    if (hostTimerRef.current) {
+      clearInterval(hostTimerRef.current);
+      hostTimerRef.current = null;
+    }
+    setIsHost(false);
+  }, []);
+  const stepDownHostRef = useRef(stepDownHost);
+  stepDownHostRef.current = stepDownHost;
+  const bindRoom = useCallback((c) => {
+    const me = meRef.current;
+    if (gameUnsubRef.current) gameUnsubRef.current();
+    gameUnsubRef.current = fbOn(GAME_PATH(c), (g) => {
+      if (!g) return;
+      if (g.hostId !== me.id) {
+        const stale = now() - (g.hostTs || 0) > HOST_STALE;
+        if (stale) {
+          const present = Object.entries(g.roster || {}).filter(([id, r]) => r.present).map(([id]) => id);
+          const lowest = me.id === [...present, me.id].sort()[0];
+          if (lowest) {
+            hostGameRef.current = g;
+            becomeHostRef.current();
+            return;
+          }
+        }
+        if (!stale && hostTimerRef.current) {
+          stepDownHostRef.current();
+        }
+        setGame(g);
+        setDiag({ seen: Object.values(g.roster || {}).filter((r) => r.present).length, err: "" });
+      } else {
+        hostGameRef.current = hostGameRef.current || g;
+        setGame(g);
+      }
+    });
+  }, []);
+  const bindPresence = useCallback((c) => {
+    if (connUnsubRef.current) connUnsubRef.current();
+    connUnsubRef.current = fbOnConnected(() => {
+      const me = meRef.current;
+      try {
+        dbRef(PLAYER_PATH(c, me.id)).onDisconnect().remove();
+      } catch (e) {
+      }
+      publishRef.current();
+    });
+  }, []);
+  const teardownOnline = useCallback(() => {
+    if (gameUnsubRef.current) {
+      gameUnsubRef.current();
+      gameUnsubRef.current = null;
+    }
+    if (playersUnsubRef.current) {
+      playersUnsubRef.current();
+      playersUnsubRef.current = null;
+    }
+    if (connUnsubRef.current) {
+      connUnsubRef.current();
+      connUnsubRef.current = null;
+    }
+    if (hostTimerRef.current) {
+      clearInterval(hostTimerRef.current);
+      hostTimerRef.current = null;
+    }
+  }, []);
+  useEffect(() => () => teardownOnline(), [teardownOnline]);
+  const createRoom = async (name) => {
+    if (!fbReady()) {
+      setShowConfig(true);
+      return;
+    }
+    const me = { id: uid(), name };
+    meRef.current = me;
+    const c = roomCode();
+    codeRef.current = c;
+    setCode(c);
+    setIsHost(true);
+    setMode("online");
+    setReady(false);
+    setJoinErr("");
+    reqsRef.current = [];
+    reqSeqRef.current = 0;
+    drawnSeqRef.current = 0;
+    const g = {
+      v: 1,
+      code: c,
+      hostId: me.id,
+      hostName: name,
+      hostTs: now(),
+      phase: "lobby",
+      bag: [],
+      bagCount: 0,
+      peelCount: 0,
+      numPlayers: 0,
+      activeCount: 1,
+      roster: {},
+      deals: {},
+      dealSeq: {},
+      ackSeq: {},
+      verdicts: {},
+      event: null
+    };
+    hostGameRef.current = g;
+    playersRef.current = {};
+    await fbSet(GAME_PATH(c), g);
+    try {
+      dbRef(PLAYER_PATH(c, me.id)).onDisconnect().remove();
+    } catch (e) {
+    }
+    await fbSet(PLAYER_PATH(c, me.id), { id: me.id, name, present: true, ts: now(), ready: false, tileCount: 0, finished: false, drawnSeq: 0, reqs: [] });
+    setGame(g);
+    setScreen("lobby");
+    bindRoom(c);
+    bindPresence(c);
+    becomeHost();
+  };
+  const joinRoom = async (name, c) => {
+    setJoinErr("");
+    if (!fbReady()) {
+      setShowConfig(true);
+      return;
+    }
+    const g = await fbOnce(GAME_PATH(c));
+    if (!g) {
+      setJoinErr(`Hittade inget rum "${c}". Dubbelkolla koden \u2014 och att ni anv\xE4nder samma Firebase-projekt.`);
+      return;
+    }
+    const present = Object.values(g.roster || {}).filter((r) => r.present).length;
+    if (present >= MAX_PLAYERS) {
+      setJoinErr("Rummet \xE4r fullt (8 spelare).");
+      return;
+    }
+    const me = { id: uid(), name };
+    meRef.current = me;
+    codeRef.current = c;
+    setCode(c);
+    setIsHost(false);
+    setMode("online");
+    setReady(false);
+    reqsRef.current = [];
+    reqSeqRef.current = 0;
+    drawnSeqRef.current = 0;
+    try {
+      dbRef(PLAYER_PATH(c, me.id)).onDisconnect().remove();
+    } catch (e) {
+    }
+    await fbSet(PLAYER_PATH(c, me.id), { id: me.id, name, present: true, ts: now(), ready: false, tileCount: 0, finished: false, drawnSeq: 0, reqs: [] });
+    setGame(g);
+    setScreen(g.phase === "lobby" ? "lobby" : "game");
+    bindRoom(c);
+    bindPresence(c);
+  };
+  const leaveRoom = async () => {
+    const c = codeRef.current;
+    teardownOnline();
+    if (mode === "online" && c) {
+      try {
+        await fbSet(PLAYER_PATH(c, meRef.current.id), null);
+      } catch (_) {
+      }
+    }
+    setMode(null);
+    setGame(null);
+    setCode("");
+    codeRef.current = "";
+    setIsHost(false);
+    setReady(false);
+    setJoinErr("");
+    setRack([]);
+    setPlaced([]);
+    setSelected(null);
+    reqsRef.current = [];
+    drawnSeqRef.current = 0;
+    hostGameRef.current = null;
+    playersRef.current = {};
+    setScreen("home");
+    refreshLb();
+  };
+  const flashTimer = useRef(null);
+  const doFlash = (msg) => {
+    setFlash(msg);
+    clearTimeout(flashTimer.current);
+    flashTimer.current = setTimeout(() => setFlash(null), 1700);
+  };
+  useEffect(() => {
+    if (!game || !game.event || mode !== "online") return;
+    const ev = game.event;
+    if (lastEventRef.current === ev.id) return;
+    lastEventRef.current = ev.id;
+    const meId2 = meRef.current.id;
+    if (ev.type === "skala") {
+      doFlash(ev.by === meId2 ? "Du skalade! Alla drar en bricka" : `${ev.name} skalade \u2014 du drar en bricka`);
+    } else if (ev.type === "banan") {
+      doFlash(`\u{1F34C} ${ev.name} ropar BANAN!`);
+    } else if (ev.type === "rutten") {
+      doFlash(`Rutten banan! ${ev.name} \xE5ker ut`);
+    } else if (ev.type === "dumpa" && ev.by === meId2) {
+    }
+  }, [game, mode]);
+  useEffect(() => {
+    if (mode !== "online" || !game || !game.deals) return;
+    const meId2 = meRef.current.id;
+    const ack = game.ackSeq && game.ackSeq[meId2] || 0;
+    if (ack > 0) reqsRef.current = reqsRef.current.filter((q) => q.seq > ack);
+    const mine = (game.deals[meId2] || []).filter((d) => d.seq > drawnSeqRef.current).sort((a, b) => a.seq - b.seq);
+    if (mine.length) {
+      const letters = [];
+      let maxSeq = drawnSeqRef.current;
+      for (const d of mine) {
+        letters.push(...d.letters);
+        maxSeq = Math.max(maxSeq, d.seq);
+      }
+      drawnSeqRef.current = maxSeq;
+      addToRack(letters);
+    }
+  }, [game, mode, addToRack]);
+  useEffect(() => {
+    if (mode !== "online" || !game) return;
+    if ((game.phase === "countdown" || game.phase === "playing") && screen === "lobby") setScreen("game");
+  }, [game, mode, screen]);
+  const prevPhaseRef = useRef(null);
+  useEffect(() => {
+    if (mode !== "online" || !game) return;
+    const ph = game.phase;
+    if (ph === "lobby" && prevPhaseRef.current && prevPhaseRef.current !== "lobby") {
+      reqsRef.current = [];
+      reqSeqRef.current = 0;
+      drawnSeqRef.current = 0;
+      setRack([]);
+      setPlaced([]);
+      setSelected(null);
+      setReady(false);
+      setScreen("lobby");
+    }
+    prevPhaseRef.current = ph;
+  }, [game, mode]);
+  useEffect(() => {
+    if (mode === "online") publishRef.current();
+  }, [mode, rack, placed, ready]);
+  useEffect(() => {
+    if (mode !== "online") return;
+    const hb = setInterval(() => publishRef.current(), 3e3);
+    return () => clearInterval(hb);
+  }, [mode]);
+  const onReady = () => {
+    const nv = !ready;
+    setReady(nv);
+    if (mode === "online") publishPlayer({ ready: nv });
+  };
+  const onSkala = () => {
+    if (!canSkala) return;
+    if (mode === "solo") soloPeel();
+    else {
+      pushReq({ type: "peel" });
+      publishPlayer();
+      doFlash("Skalar\u2026");
+    }
+  };
+  const onDumpa = () => {
+    if (!selected) {
+      doFlash("V\xE4lj en bricka att dumpa f\xF6rst");
+      return;
+    }
+    if (bagCount < 3) {
+      doFlash("F\xF6r f\xE5 brickor i klasen f\xF6r att dumpa");
+      return;
+    }
+    const letter = selected.letter, id = selected.id, from = selected.from;
+    if (mode === "solo") {
+      soloDump(letter, id, from);
+    } else {
+      if (from === "rack") setRack((rk) => rk.filter((x) => x.id !== id));
+      else setPlaced((p) => p.filter((x) => x.id !== id));
+      setSelected(null);
+      pushReq({ type: "dump", letter });
+      publishPlayer();
+    }
+  };
+  const onBanan = async () => {
+    if (!canBanan) return;
+    const v = gridValid(placed, rack.length);
+    if (!v.ok) return;
+    if (mode === "solo") {
+      soloBanan();
+      return;
+    }
+    const board = { cells: placed.map((p) => ({ r: p.r, c: p.c, l: p.letter })), words: v.words };
+    pushReq({ type: "bananas", board });
+    await publishPlayer({ board });
+    doFlash("Du ropade BANAN! V\xE4ntar p\xE5 granskning\u2026");
+  };
+  const onVote = (ok) => {
+    pushReq({ type: "verdict", ok });
+    publishPlayer();
+  };
+  const playAgain = async () => {
+    if (!isHost) return;
+    const c = codeRef.current;
+    const g = {
+      v: (game.v || 0) + 1,
+      code: c,
+      hostId: meRef.current.id,
+      hostName: meRef.current.name,
+      hostTs: now(),
+      phase: "lobby",
+      bag: [],
+      bagCount: 0,
+      peelCount: 0,
+      numPlayers: 0,
+      activeCount: 1,
+      roster: {},
+      deals: {},
+      dealSeq: {},
+      ackSeq: {},
+      verdicts: {},
+      event: { id: uid(), type: "reset", ts: now() }
+    };
+    setRack([]);
+    setPlaced([]);
+    setSelected(null);
+    setReady(false);
+    reqsRef.current = [];
+    reqSeqRef.current = 0;
+    drawnSeqRef.current = 0;
+    hostGameRef.current = g;
+    await fbSet(GAME_PATH(c), g);
+    setGame(g);
+    setScreen("lobby");
+  };
+  if (screen === "home") {
+    return /* @__PURE__ */ React.createElement("div", { className: "bf-root" }, /* @__PURE__ */ React.createElement("style", null, CSS), /* @__PURE__ */ React.createElement(
+      Home,
+      {
+        sharedOK: fbOk,
+        lb,
+        onShowRules: () => setShowRules(true),
+        joinErr,
+        onConfig: () => setShowConfig(true),
+        onSolo: startSolo,
+        onCreate: createRoom,
+        onJoin: joinRoom
+      }
+    ), showRules && /* @__PURE__ */ React.createElement(Rules, { onClose: () => setShowRules(false) }), showConfig && /* @__PURE__ */ React.createElement(ConfigModal, { onClose: () => setShowConfig(false), onSaved: () => {
+      setFbOk(true);
+      refreshLb();
+    } }));
+  }
+  if (screen === "lobby") {
+    return /* @__PURE__ */ React.createElement("div", { className: "bf-root" }, /* @__PURE__ */ React.createElement("style", null, CSS), /* @__PURE__ */ React.createElement(
+      Lobby,
+      {
+        code,
+        roster: game ? game.roster : {},
+        meId: meRef.current.id,
+        ready,
+        sharedOK: fbOk,
+        diag,
+        isHost,
+        onReady,
+        onLeave: leaveRoom,
+        onShowRules: () => setShowRules(true)
+      }
+    ), showRules && /* @__PURE__ */ React.createElement(Rules, { onClose: () => setShowRules(false) }));
+  }
+  const phase = game ? game.phase : "playing";
+  const roster = game && game.roster || {};
+  const others = Object.entries(roster).filter(([id, r]) => r.present);
+  const meId = meRef.current.id;
+  const dumpEnabled = !!selected && bagCount >= 3 && phase === "playing";
+  return /* @__PURE__ */ React.createElement("div", { className: "bf-root" }, /* @__PURE__ */ React.createElement("style", null, CSS), /* @__PURE__ */ React.createElement("div", { className: "bf-wrap" }, /* @__PURE__ */ React.createElement("div", { className: "bf-top" }, /* @__PURE__ */ React.createElement("button", { className: "bf-tool", style: { flex: "0 0 auto", padding: "6px 10px" }, onClick: leaveRoom }, "\u2190"), /* @__PURE__ */ React.createElement("div", { className: "bf-pill" }, "\u{1F34C} Klasen: ", /* @__PURE__ */ React.createElement("b", null, bagCount)), /* @__PURE__ */ React.createElement("div", { className: "bf-pill", style: { marginLeft: "auto" } }, "Hylla: ", /* @__PURE__ */ React.createElement("b", null, rack.length)), /* @__PURE__ */ React.createElement("button", { className: "bf-tool", style: { flex: "0 0 auto", padding: "6px 10px" }, onClick: () => setShowRules(true) }, "?")), mode === "online" && /* @__PURE__ */ React.createElement("div", { className: "bf-players" }, others.map(([id, r]) => /* @__PURE__ */ React.createElement("div", { key: id, className: "bf-pcard" + (id === meId ? " you" : "") + (r.finished ? " done" : "") + (r.rotten ? " rutten" : "") }, /* @__PURE__ */ React.createElement("div", { className: "bf-pname" }, r.name, id === meId ? " (du)" : ""), /* @__PURE__ */ React.createElement("div", { className: "bf-pcount" + (r.rotten ? " dim" : "") }, r.rotten ? "ut" : r.finished ? "\u2713" : r.tileCount)))), /* @__PURE__ */ React.createElement(Board, { placed, selected, onPlaceAt: placeAt, onPickTile: pickTile, viewRef }), /* @__PURE__ */ React.createElement("div", { className: "bf-dock" }, /* @__PURE__ */ React.createElement("div", { className: "bf-rack" + (rack.length === 0 ? " empty" : "") }, rack.length === 0 ? "Hyllan \xE4r tom \u2014 bygg klart din fl\xE4ta!" : rack.map((t) => /* @__PURE__ */ React.createElement(
+    Tile,
+    {
+      key: t.id,
+      letter: t.letter,
+      size: 46,
+      selected: selected && selected.from === "rack" && selected.id === t.id,
+      onPointerDown: () => selectRack(t)
+    }
+  ))), /* @__PURE__ */ React.createElement("div", { className: "bf-toolrow" }, /* @__PURE__ */ React.createElement("button", { className: "bf-tool", onClick: shuffleRack }, "Blanda hylla"), /* @__PURE__ */ React.createElement("button", { className: "bf-tool", onClick: recallAll }, "Samla brickor"), /* @__PURE__ */ React.createElement("button", { className: "bf-tool", onClick: () => {
+    if (viewRef.current.setView) {
+      const el = document.querySelector(".bf-boardwrap");
+      const r = el.getBoundingClientRect();
+      viewRef.current.setView({ scale: 1, x: r.width / 2 - CENTER * CELL - CELL / 2, y: r.height / 2 - CENTER * CELL - CELL / 2 });
+    }
+  } }, "Centrera")), /* @__PURE__ */ React.createElement("div", { className: "bf-actions" }, /* @__PURE__ */ React.createElement("button", { className: "bf-skala", disabled: !canSkala, onClick: onSkala }, "SKALA"), /* @__PURE__ */ React.createElement("button", { className: "bf-banan", disabled: !canBanan, onClick: onBanan }, "BANAN!"), /* @__PURE__ */ React.createElement("button", { className: "bf-dumpbtn", disabled: !dumpEnabled, onClick: onDumpa }, "DUMPA")), !valid.ok && rack.length === 0 && /* @__PURE__ */ React.createElement("div", { className: "bf-mini", style: { textAlign: "center", marginTop: 6, color: "var(--banan-mogen)" } }, valid.why), valid.ok && !canSkala && !canBanan && phase === "playing" && /* @__PURE__ */ React.createElement("div", { className: "bf-mini", style: { textAlign: "center", marginTop: 6 } }, "Klar! V\xE4ntar\u2026"))), flash && /* @__PURE__ */ React.createElement("div", { className: "bf-flash" }, /* @__PURE__ */ React.createElement("div", { className: "msg" }, flash)), phase === "countdown" && game && /* @__PURE__ */ React.createElement(Countdown, { endsAt: game.countdownEnd }), phase === "verifying" && game && mode === "online" && /* @__PURE__ */ React.createElement(VerifyOverlay, { game, meId, amWinner: game.winnerId === meId, onVote }), phase === "finished" && game && /* @__PURE__ */ React.createElement(
+    Results,
+    {
+      game,
+      meId,
+      lb,
+      amHost: mode === "solo" ? true : isHost,
+      onAgain: mode === "solo" ? () => startSolo(meRef.current.name) : playAgain,
+      onHome: leaveRoom
+    }
+  ), showRules && /* @__PURE__ */ React.createElement(Rules, { onClose: () => setShowRules(false) }));
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(App));
+</script>
+</body>
+</html>
