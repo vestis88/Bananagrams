@@ -2,10 +2,14 @@
 <html lang="sv">
 <head>
 <meta charset="utf-8"/>
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"/>
+<meta http-equiv="Pragma" content="no-cache"/>
+<meta http-equiv="Expires" content="0"/>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
 <meta name="theme-color" content="#0f3b34"/>
 <title>Bananfläta</title>
+<!-- build-1782310200125 -->
 <style>html,body{margin:0;padding:0;height:100%;background:#0f3b34;overscroll-behavior:none;}#root{height:100%;}</style>
 <script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js" crossorigin></script>
 <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js" crossorigin></script>
@@ -22,6 +26,8 @@ window.__FIREBASE_CONFIG__ = {
   appId: "1:911449650387:web:f3791f8fc7c583cdc1d026",
   measurementId: "G-1MFKVZCBMH"
 };
+window.__BUILD__="build-1782310200125";
+(function(){try{var B=window.__BUILD__;fetch(location.pathname+"?_="+Date.now(),{cache:"no-store"}).then(function(r){return r.text();}).then(function(t){var m=t.match(/__BUILD__="(build-\d+)"/);if(m&&m[1]!==B){var k="bf_r_"+m[1];if(!sessionStorage.getItem(k)){sessionStorage.setItem(k,"1");location.replace(location.pathname+"?b="+m[1]);return;}}if(location.search){try{history.replaceState(null,"",location.pathname);}catch(e){}}}).catch(function(){});}catch(e){}})();
 </script>
 </head>
 <body>
@@ -411,20 +417,28 @@ function hostStep(game, players) {
   }
   if (game.phase === "lobby") {
     const readyActive = activeIds.filter((id) => players[id] && players[id].ready);
-    if (activeCount >= 2 && readyActive.length === activeCount) {
+    const st = Math.max(1, game.startTiles || 21);
+    const bt = Math.min(144, Math.max(1, game.bagTotal || 144));
+    const fits = st * activeCount <= bt;
+    if (activeCount >= 2 && readyActive.length === activeCount && fits) {
       game.phase = "countdown";
       game.countdownEnd = now() + COUNTDOWN_MS;
       game.numPlayers = activeCount;
       let bag = shuffle(buildBag());
-      if (game.shortMode && activeCount <= 3) bag = bag.slice(0, 72);
+      if (bt < 144) bag = bag.slice(0, bt);
       game.bag = bag;
       game.startIds = activeIds.slice();
+      game.startError = null;
+    } else if (activeCount >= 2 && readyActive.length === activeCount && !fits) {
+      game.startError = `${st} startbrickor \xD7 ${activeCount} spelare = ${st * activeCount} men klasen har bara ${bt}. V\xE4rden: s\xE4nk startbrickor eller h\xF6j klasen.`;
+    } else {
+      game.startError = null;
     }
   } else if (game.phase === "countdown") {
     if (now() >= game.countdownEnd) {
       game.phase = "playing";
       game.startedAt = now();
-      const per = startingTiles(game.numPlayers || activeCount);
+      const per = Math.max(1, game.startTiles || 21);
       for (const id of game.startIds || activeIds) {
         dealTo(id, game.bag.splice(0, per));
       }
@@ -629,12 +643,25 @@ function Countdown({ endsAt }) {
   }, [endsAt]);
   return /* @__PURE__ */ React.createElement("div", { className: "bf-ov" }, /* @__PURE__ */ React.createElement("div", { style: { textAlign: "center" } }, /* @__PURE__ */ React.createElement("div", { className: "bf-banana-logo" }, "G\xF6r er redo"), /* @__PURE__ */ React.createElement("div", { className: "bf-count" }, n > 0 ? n : "K\xD6R!"), /* @__PURE__ */ React.createElement("div", { className: "bf-mini" }, "Brickorna delas ut och v\xE4nds samtidigt")));
 }
+function Stepper({ label, sub, value, min, max, step, onChange }) {
+  return /* @__PURE__ */ React.createElement("div", { className: "bf-card", style: { padding: 12, marginBottom: 10, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 } }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("div", { style: { fontWeight: 800 } }, label), sub && /* @__PURE__ */ React.createElement("div", { className: "bf-mini" }, sub)), /* @__PURE__ */ React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 8 } }, /* @__PURE__ */ React.createElement("button", { className: "bf-tool", style: { flex: "0 0 auto", width: 42, fontSize: 22, padding: "8px 0" }, onClick: () => onChange(Math.max(min, value - step)) }, "\u2212"), /* @__PURE__ */ React.createElement("div", { style: { minWidth: 40, textAlign: "center", fontWeight: 900, fontSize: 19, fontVariantNumeric: "tabular-nums" } }, value), /* @__PURE__ */ React.createElement("button", { className: "bf-tool", style: { flex: "0 0 auto", width: 42, fontSize: 22, padding: "8px 0" }, onClick: () => onChange(Math.min(max, value + step)) }, "+")));
+}
+function setupFits(start, bag, players) {
+  return start >= 1 && players >= 1 && start * players <= bag;
+}
+function GameSetup({ start, bag, onStart, onBag, players, readOnly }) {
+  const need = start * players, fits = setupFits(start, bag, players);
+  if (readOnly) {
+    return /* @__PURE__ */ React.createElement("div", { className: "bf-mini", style: { textAlign: "center", marginBottom: 12 } }, "Uppst\xE4llning: ", start, " startbrickor \xB7 ", bag, " i klasen");
+  }
+  return /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement(Stepper, { label: "Startbrickor", sub: "per spelare", value: start, min: 3, max: 40, step: 1, onChange: onStart }), /* @__PURE__ */ React.createElement(Stepper, { label: "Brickor i klasen", sub: "totalt i p\xE5sen (max 144)", value: bag, min: 24, max: 144, step: 6, onChange: onBag }), /* @__PURE__ */ React.createElement("div", { className: "bf-mini", style: { textAlign: "center", marginBottom: 8, color: fits ? "var(--dim)" : "var(--fara)", fontWeight: fits ? 400 : 800 } }, fits ? `${start} \xD7 ${players} = ${need} delas ut, ${bag - need} kvar i klasen` : `${start} \xD7 ${players} = ${need} brickor beh\xF6vs men klasen har bara ${bag} \u2014 h\xF6j klasen eller s\xE4nk startbrickor`));
+}
 function Leaderboard({ entries }) {
   const rows = Object.values(entries || {}).sort((a, b) => b.wins - a.wins).slice(0, 12);
   if (rows.length === 0) return /* @__PURE__ */ React.createElement("div", { className: "bf-mini", style: { textAlign: "center", padding: "12px" } }, "Inga toppbananer \xE4n. Vinn en omg\xE5ng!");
   return /* @__PURE__ */ React.createElement("div", null, rows.map((e, i) => /* @__PURE__ */ React.createElement("div", { className: "bf-lbrow", key: i }, /* @__PURE__ */ React.createElement("div", { className: "bf-rank" }, i === 0 ? "\u{1F34C}" : i + 1), /* @__PURE__ */ React.createElement("div", { style: { flex: 1, fontWeight: 800 } }, e.name), /* @__PURE__ */ React.createElement("div", { style: { fontWeight: 900, color: "var(--banan)" } }, e.wins), /* @__PURE__ */ React.createElement("div", { className: "bf-mini" }, e.wins === 1 ? "vinst" : "vinster"))));
 }
-function Home({ onSolo, onCreate, onJoin, lb, onShowRules, sharedOK, joinErr, onConfig }) {
+function Home({ onSolo, onCreate, onJoin, lb, onShowRules, sharedOK, joinErr, onConfig, setup, onSetStart, onSetBag }) {
   const [name, setName] = useState(() => localStorageName());
   const [code, setCode] = useState("");
   const [tab, setTab] = useState("start");
@@ -695,7 +722,7 @@ function Home({ onSolo, onCreate, onJoin, lb, onShowRules, sharedOK, joinErr, on
       style: { flex: "0 0 auto" }
     },
     "G\xE5 med"
-  )), joinErr && /* @__PURE__ */ React.createElement("div", { className: "bf-mini", style: { color: "var(--fara)", marginTop: 10, fontWeight: 700 } }, joinErr), /* @__PURE__ */ React.createElement("div", { className: "bf-mini", style: { marginTop: 10, textAlign: "center" } }, "Dela rumskoden med dina medspelare s\xE5 g\xE5r de med p\xE5 sina egna telefoner."), /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: 8, marginTop: 10 } }, /* @__PURE__ */ React.createElement("button", { className: "bf-tool", style: { flex: 1 }, onClick: onConfig }, sharedOK ? "Firebase \u2713 (\xE4ndra)" : "Anslut Firebase"), /* @__PURE__ */ React.createElement("button", { className: "bf-tool", style: { flex: 1 }, onClick: runTest }, "Testa anslutning")), testMsg && /* @__PURE__ */ React.createElement("div", { className: "bf-mini", style: { marginTop: 8 } }, testMsg)) : /* @__PURE__ */ React.createElement("div", { className: "bf-card", style: { padding: 16 } }, /* @__PURE__ */ React.createElement("div", { className: "bf-mini", style: { marginBottom: 10 } }, "Patiens: anv\xE4nd alla 144 brickorna i en enda sammanh\xE4ngande ordfl\xE4ta. Bra f\xF6r att \xF6va br\xE4det."), /* @__PURE__ */ React.createElement("button", { className: "bf-btn", style: { width: "100%" }, disabled: !name.trim(), onClick: () => onSolo(name.trim()) }, "Starta patiens")), /* @__PURE__ */ React.createElement("div", { className: "bf-card", style: { padding: 16, marginTop: 14 } }, /* @__PURE__ */ React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 } }, /* @__PURE__ */ React.createElement("div", { style: { fontWeight: 800 } }, "\u{1F3C6} Topplista"), /* @__PURE__ */ React.createElement("button", { className: "bf-tool", style: { flex: "0 0 auto" }, onClick: onShowRules }, "Regler & brickor")), /* @__PURE__ */ React.createElement(Leaderboard, { entries: lb })));
+  )), joinErr && /* @__PURE__ */ React.createElement("div", { className: "bf-mini", style: { color: "var(--fara)", marginTop: 10, fontWeight: 700 } }, joinErr), /* @__PURE__ */ React.createElement("div", { className: "bf-mini", style: { marginTop: 10, textAlign: "center" } }, "Dela rumskoden med dina medspelare s\xE5 g\xE5r de med p\xE5 sina egna telefoner."), /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: 8, marginTop: 10 } }, /* @__PURE__ */ React.createElement("button", { className: "bf-tool", style: { flex: 1 }, onClick: onConfig }, sharedOK ? "Firebase \u2713 (\xE4ndra)" : "Anslut Firebase"), /* @__PURE__ */ React.createElement("button", { className: "bf-tool", style: { flex: 1 }, onClick: runTest }, "Testa anslutning")), testMsg && /* @__PURE__ */ React.createElement("div", { className: "bf-mini", style: { marginTop: 8 } }, testMsg)) : /* @__PURE__ */ React.createElement("div", { className: "bf-card", style: { padding: 16 } }, /* @__PURE__ */ React.createElement("div", { className: "bf-mini", style: { marginBottom: 12 } }, "Patiens: l\xE4gg ut alla dina brickor i en sammanh\xE4ngande ordfl\xE4ta, dra nya ur klasen med Skala. V\xE4lj uppst\xE4llning nedan."), /* @__PURE__ */ React.createElement(GameSetup, { start: setup.start, bag: setup.bag, onStart: onSetStart, onBag: onSetBag, players: 1 }), /* @__PURE__ */ React.createElement("button", { className: "bf-btn", style: { width: "100%" }, disabled: !name.trim() || !setupFits(setup.start, setup.bag, 1), onClick: () => onSolo(name.trim()) }, "Starta patiens")), /* @__PURE__ */ React.createElement("div", { className: "bf-card", style: { padding: 16, marginTop: 14 } }, /* @__PURE__ */ React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 } }, /* @__PURE__ */ React.createElement("div", { style: { fontWeight: 800 } }, "\u{1F3C6} Topplista"), /* @__PURE__ */ React.createElement("button", { className: "bf-tool", style: { flex: "0 0 auto" }, onClick: onShowRules }, "Regler & brickor")), /* @__PURE__ */ React.createElement(Leaderboard, { entries: lb })));
 }
 function localStorageName() {
   return "";
@@ -755,10 +782,12 @@ function Rules({ onClose }) {
   const dist = Object.entries(DISTRIBUTION);
   return /* @__PURE__ */ React.createElement("div", { className: "bf-ov" }, /* @__PURE__ */ React.createElement("div", { className: "bf-ovcard bf-scroll" }, /* @__PURE__ */ React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center" } }, /* @__PURE__ */ React.createElement("div", { className: "bf-h1", style: { fontSize: 22 } }, "S\xE5 spelar du"), /* @__PURE__ */ React.createElement("button", { className: "bf-tool", style: { flex: "0 0 auto" }, onClick: onClose }, "St\xE4ng")), /* @__PURE__ */ React.createElement("ol", { style: { fontSize: 14, lineHeight: 1.5, paddingLeft: 18, marginTop: 10 } }, /* @__PURE__ */ React.createElement("li", null, "Alla markerar ", /* @__PURE__ */ React.createElement("b", null, "Redo"), ". N\xE4r alla \xE4r redo startar en gemensam nedr\xE4kning och brickorna delas ut samtidigt."), /* @__PURE__ */ React.createElement("li", null, "Bygg en sammanh\xE4ngande ordfl\xE4ta (v\xE5gr\xE4tt/lodr\xE4tt) av alla dina brickor."), /* @__PURE__ */ React.createElement("li", null, "Klar med alla brickor och klasen r\xE4cker? Tryck ", /* @__PURE__ */ React.createElement("b", { style: { color: "var(--skala)" } }, "SKALA"), " \u2014 d\xE5 drar ", /* @__PURE__ */ React.createElement("i", null, "alla"), " en ny bricka."), /* @__PURE__ */ React.createElement("li", null, "Sitter du fast p\xE5 en bokstav? V\xE4lj brickan och tryck ", /* @__PURE__ */ React.createElement("b", null, "DUMPA"), " \u2014 l\xE4gg tillbaka 1, dra 3 nya."), /* @__PURE__ */ React.createElement("li", null, "N\xE4r klasen har f\xE4rre brickor \xE4n antal spelare och du blir klar: tryck ", /* @__PURE__ */ React.createElement("b", { style: { color: "var(--banan-mogen)" } }, "BANAN!")), /* @__PURE__ */ React.createElement("li", null, "De andra granskar din fl\xE4ta. Fel ord \u2192 ", /* @__PURE__ */ React.createElement("b", null, "Rutten banan"), ", dina brickor \xE5ter i klasen och \xF6vriga spelar vidare. Allt r\xE4tt \u2192 du blir ", /* @__PURE__ */ React.createElement("b", null, "Toppbanan"), ".")), /* @__PURE__ */ React.createElement("div", { style: { fontWeight: 800, marginTop: 14, marginBottom: 6 } }, "Startbrickor"), /* @__PURE__ */ React.createElement("div", { className: "bf-mini" }, "2\u20134 spelare: 21 \xB7 5\u20136 spelare: 15 \xB7 7\u20138 spelare: 11 \xB7 patiens: alla 144"), /* @__PURE__ */ React.createElement("div", { style: { fontWeight: 800, marginTop: 14, marginBottom: 8 } }, "Bokstavsf\xF6rdelning (officiell svensk, ", TOTAL_TILES, " brickor)"), /* @__PURE__ */ React.createElement("div", { className: "bf-disttbl" }, dist.map(([l, n]) => /* @__PURE__ */ React.createElement("div", { key: l, className: VOWELS.has(l) ? "vow" : "" }, l, " = ", n))), /* @__PURE__ */ React.createElement("div", { className: "bf-mini", style: { marginTop: 8 } }, "Q, W och Z ing\xE5r inte i svenska utg\xE5van. Vokaler i gult.")));
 }
-function Lobby({ code, roster, meId, ready, onReady, onLeave, onShowRules, sharedOK, diag, isHost, shortMode, onToggleShort }) {
+function Lobby({ code, roster, meId, ready, onReady, onLeave, onShowRules, sharedOK, diag, isHost, start, bag, onStart, onBag, startError }) {
   const list = Object.entries(roster || {}).filter(([id, r]) => r.present);
+  const connected = list.length;
+  const fits = setupFits(start, bag, Math.max(connected, 1));
   const allReady = list.length >= 2 && list.every(([id, r]) => r.ready);
-  return /* @__PURE__ */ React.createElement("div", { className: "bf-wrap bf-scroll", style: { padding: "18px 16px" } }, /* @__PURE__ */ React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 } }, /* @__PURE__ */ React.createElement("button", { className: "bf-tool", style: { flex: "0 0 auto" }, onClick: onLeave }, "\u2190 L\xE4mna"), /* @__PURE__ */ React.createElement("div", { className: "bf-banana-logo" }, "V\xE4ntrum"), /* @__PURE__ */ React.createElement("button", { className: "bf-tool", style: { flex: "0 0 auto" }, onClick: onShowRules }, "Regler")), /* @__PURE__ */ React.createElement("div", { className: "bf-card", style: { padding: 18, textAlign: "center", marginBottom: 14 } }, /* @__PURE__ */ React.createElement("div", { className: "bf-mini" }, "Rumskod \u2014 dela med dina medspelare"), /* @__PURE__ */ React.createElement("div", { style: { fontSize: 46, fontWeight: 900, letterSpacing: 8, color: "var(--banan)" } }, code)), /* @__PURE__ */ React.createElement("div", { className: "bf-card", style: { padding: 14, marginBottom: 14 } }, /* @__PURE__ */ React.createElement("div", { style: { fontWeight: 800, marginBottom: 8 } }, "Spelare (", list.length, "/", MAX_PLAYERS, ")"), list.map(([id, r]) => /* @__PURE__ */ React.createElement("div", { key: id, className: "bf-ready", style: { padding: "7px 2px", borderBottom: "1px solid rgba(255,255,255,.06)" } }, /* @__PURE__ */ React.createElement("span", { style: { flex: 1 } }, r.name, id === meId ? " (du)" : "", r.host ? " \u{1F451}" : ""), /* @__PURE__ */ React.createElement("span", { style: { color: r.ready ? "var(--skala)" : "var(--dim)", fontWeight: 800, fontSize: 13 } }, r.ready ? "\u2713 Redo" : "v\xE4ntar"))), list.length < 2 && /* @__PURE__ */ React.createElement("div", { className: "bf-mini", style: { marginTop: 8 } }, "Minst 2 spelare beh\xF6vs f\xF6r att starta.")), isHost ? /* @__PURE__ */ React.createElement("div", { className: "bf-card", style: { padding: 14, marginBottom: 14, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 } }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("div", { style: { fontWeight: 800 } }, "Kort spel"), /* @__PURE__ */ React.createElement("div", { className: "bf-mini" }, "72 brickor i st\xE4llet f\xF6r 144 \u2014 snabbare runda (f\xF6r 2\u20133 spelare)")), /* @__PURE__ */ React.createElement("button", { className: "bf-tool", style: { flex: "0 0 auto", minWidth: 56, background: shortMode ? "var(--skala)" : void 0, color: shortMode ? "#10301a" : void 0, fontWeight: 800 }, onClick: onToggleShort }, shortMode ? "P\xC5" : "AV")) : shortMode && /* @__PURE__ */ React.createElement("div", { className: "bf-mini", style: { textAlign: "center", marginBottom: 14 } }, "Kort spel (72 brickor)"), /* @__PURE__ */ React.createElement(
+  return /* @__PURE__ */ React.createElement("div", { className: "bf-wrap bf-scroll", style: { padding: "18px 16px" } }, /* @__PURE__ */ React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 } }, /* @__PURE__ */ React.createElement("button", { className: "bf-tool", style: { flex: "0 0 auto" }, onClick: onLeave }, "\u2190 L\xE4mna"), /* @__PURE__ */ React.createElement("div", { className: "bf-banana-logo" }, "V\xE4ntrum"), /* @__PURE__ */ React.createElement("button", { className: "bf-tool", style: { flex: "0 0 auto" }, onClick: onShowRules }, "Regler")), /* @__PURE__ */ React.createElement("div", { className: "bf-card", style: { padding: 18, textAlign: "center", marginBottom: 14 } }, /* @__PURE__ */ React.createElement("div", { className: "bf-mini" }, "Rumskod \u2014 dela med dina medspelare"), /* @__PURE__ */ React.createElement("div", { style: { fontSize: 46, fontWeight: 900, letterSpacing: 8, color: "var(--banan)" } }, code)), /* @__PURE__ */ React.createElement("div", { className: "bf-card", style: { padding: 14, marginBottom: 14 } }, /* @__PURE__ */ React.createElement("div", { style: { fontWeight: 800, marginBottom: 8 } }, "Spelare (", list.length, "/", MAX_PLAYERS, ")"), list.map(([id, r]) => /* @__PURE__ */ React.createElement("div", { key: id, className: "bf-ready", style: { padding: "7px 2px", borderBottom: "1px solid rgba(255,255,255,.06)" } }, /* @__PURE__ */ React.createElement("span", { style: { flex: 1 } }, r.name, id === meId ? " (du)" : "", r.host ? " \u{1F451}" : ""), /* @__PURE__ */ React.createElement("span", { style: { color: r.ready ? "var(--skala)" : "var(--dim)", fontWeight: 800, fontSize: 13 } }, r.ready ? "\u2713 Redo" : "v\xE4ntar"))), list.length < 2 && /* @__PURE__ */ React.createElement("div", { className: "bf-mini", style: { marginTop: 8 } }, "Minst 2 spelare beh\xF6vs f\xF6r att starta.")), isHost ? /* @__PURE__ */ React.createElement("div", { className: "bf-card", style: { padding: 14, marginBottom: 14 } }, /* @__PURE__ */ React.createElement("div", { style: { fontWeight: 800, marginBottom: 10 } }, "Uppst\xE4llning"), /* @__PURE__ */ React.createElement(GameSetup, { start, bag, onStart, onBag, players: Math.max(connected, 1) })) : /* @__PURE__ */ React.createElement(GameSetup, { start, bag, players: Math.max(connected, 1), readOnly: true }), /* @__PURE__ */ React.createElement(
     "button",
     {
       className: "bf-btn",
@@ -766,7 +795,7 @@ function Lobby({ code, roster, meId, ready, onReady, onLeave, onShowRules, share
       onClick: onReady
     },
     ready ? "\u2713 Du \xE4r redo (tryck f\xF6r att \xE5ngra)" : "Jag \xE4r redo"
-  ), allReady && /* @__PURE__ */ React.createElement("div", { className: "bf-mini", style: { textAlign: "center", marginTop: 10 } }, "Alla redo \u2014 nedr\xE4kningen startar\u2026"), /* @__PURE__ */ React.createElement("div", { className: "bf-mini", style: { textAlign: "center", marginTop: 14, opacity: 0.7 } }, sharedOK ? "Firebase: ansluten" : "Firebase: EJ ansluten", " \xB7 synliga spelare: ", diag ? diag.seen : list.length, " \xB7 ", isHost ? "du \xE4r v\xE4rd" : "ansluten", diag && diag.err ? ` \xB7 fel: ${diag.err}` : ""), sharedOK && list.length < 2 && /* @__PURE__ */ React.createElement("div", { className: "bf-mini", style: { textAlign: "center", marginTop: 6, color: "var(--banan-mogen)" } }, "V\xE4ntar p\xE5 fler spelare\u2026 Be din medspelare \xF6ppna samma sida och skriva koden ovan."));
+  ), !fits && /* @__PURE__ */ React.createElement("div", { className: "bf-mini", style: { textAlign: "center", marginTop: 10, color: "var(--fara)", fontWeight: 700 } }, "Uppst\xE4llningen passar inte ", connected, " spelare \u2014 ", isHost ? "justera reglagen ovan" : "v\xE4rden m\xE5ste justera reglagen", "."), startError && /* @__PURE__ */ React.createElement("div", { className: "bf-mini", style: { textAlign: "center", marginTop: 8, color: "var(--fara)", fontWeight: 700 } }, startError), allReady && fits && /* @__PURE__ */ React.createElement("div", { className: "bf-mini", style: { textAlign: "center", marginTop: 10 } }, "Alla redo \u2014 nedr\xE4kningen startar\u2026"), /* @__PURE__ */ React.createElement("div", { className: "bf-mini", style: { textAlign: "center", marginTop: 14, opacity: 0.7 } }, sharedOK ? "Firebase: ansluten" : "Firebase: EJ ansluten", " \xB7 synliga spelare: ", diag ? diag.seen : list.length, " \xB7 ", isHost ? "du \xE4r v\xE4rd" : "ansluten", diag && diag.err ? ` \xB7 fel: ${diag.err}` : ""), sharedOK && list.length < 2 && /* @__PURE__ */ React.createElement("div", { className: "bf-mini", style: { textAlign: "center", marginTop: 6, color: "var(--banan-mogen)" } }, "V\xE4ntar p\xE5 fler spelare\u2026 Be din medspelare \xF6ppna samma sida och skriva koden ovan."));
 }
 function VerifyOverlay({ game, meId, onVote, amWinner }) {
   const board = game.verifyBoard;
@@ -864,6 +893,7 @@ function App() {
     const c = loadFirebaseConfig();
     return c ? initFirebase(c) : false;
   });
+  const [setup, setSetup] = useState({ start: 21, bag: 144 });
   const gameUnsubRef = useRef(null);
   const playersUnsubRef = useRef(null);
   const connUnsubRef = useRef(null);
@@ -929,9 +959,12 @@ function App() {
   }, []);
   const startSolo = (name) => {
     meRef.current = { id: uid(), name };
-    soloBagRef.current = shuffle(buildBag());
+    const total = Math.min(144, Math.max(setup.start, setup.bag));
+    let bag = shuffle(buildBag());
+    if (total < 144) bag = bag.slice(0, total);
+    soloBagRef.current = bag;
     drawnSeqRef.current = 0;
-    const start = soloBagRef.current.splice(0, startingTiles(1));
+    const start = soloBagRef.current.splice(0, Math.min(setup.start, soloBagRef.current.length));
     setRack(tilesFromLetters(start));
     setPlaced([]);
     setSelected(null);
@@ -1130,6 +1163,8 @@ function App() {
       peelCount: 0,
       numPlayers: 0,
       activeCount: 1,
+      startTiles: setup.start,
+      bagTotal: setup.bag,
       roster: {},
       deals: {},
       dealSeq: {},
@@ -1284,9 +1319,10 @@ function App() {
     setReady(nv);
     if (mode === "online") publishPlayer({ ready: nv });
   };
-  const toggleShort = () => {
+  const setHostSetting = (key, val) => {
     if (!hostGameRef.current) return;
-    hostGameRef.current.shortMode = !hostGameRef.current.shortMode;
+    hostGameRef.current[key] = val;
+    setSetup((s) => ({ ...s, [key === "startTiles" ? "start" : "bag"]: val }));
     hostRecomputeRef.current();
   };
   const onSkala = () => {
@@ -1338,6 +1374,7 @@ function App() {
   const playAgain = async () => {
     if (!isHost) return;
     const c = codeRef.current;
+    const prev = hostGameRef.current || {};
     const g = {
       v: (game.v || 0) + 1,
       code: c,
@@ -1350,6 +1387,8 @@ function App() {
       peelCount: 0,
       numPlayers: 0,
       activeCount: 1,
+      startTiles: prev.startTiles || setup.start,
+      bagTotal: prev.bagTotal || setup.bag,
       roster: {},
       deals: {},
       dealSeq: {},
@@ -1378,6 +1417,9 @@ function App() {
         onShowRules: () => setShowRules(true),
         joinErr,
         onConfig: () => setShowConfig(true),
+        setup,
+        onSetStart: (v) => setSetup((s) => ({ ...s, start: v })),
+        onSetBag: (v) => setSetup((s) => ({ ...s, bag: v })),
         onSolo: startSolo,
         onCreate: createRoom,
         onJoin: joinRoom
@@ -1398,8 +1440,11 @@ function App() {
         sharedOK: fbOk,
         diag,
         isHost,
-        shortMode: !!(game && game.shortMode),
-        onToggleShort: toggleShort,
+        start: game && game.startTiles ? game.startTiles : setup.start,
+        bag: game && game.bagTotal ? game.bagTotal : setup.bag,
+        onStart: (v) => setHostSetting("startTiles", v),
+        onBag: (v) => setHostSetting("bagTotal", v),
+        startError: game && game.startError,
         onReady,
         onLeave: leaveRoom,
         onShowRules: () => setShowRules(true)
