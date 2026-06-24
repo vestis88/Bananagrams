@@ -4,7 +4,6 @@
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
 <meta name="theme-color" content="#0f3b34"/>
 <title>Bananfläta</title>
 <style>html,body{margin:0;padding:0;height:100%;background:#0f3b34;overscroll-behavior:none;}#root{height:100%;}</style>
@@ -13,11 +12,6 @@
 <script src="https://www.gstatic.com/firebasejs/12.15.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.15.0/firebase-database-compat.js"></script>
 <script>
-/* =========================================================================
-   FIREBASE-KONFIG — klistra in din egen här ELLER gör det i appen
-   ("Anslut Firebase"). Hämtas i Firebase-konsolen: Projektinställningar →
-   Dina appar → Webb (</>). Aktivera Realtime Database (testläge) först.
-   ========================================================================= */
 window.__FIREBASE_CONFIG__ = {
   apiKey: "AIzaSyDUAahPvQ0K_mSV4oyEWsNpNxQbbPwsgO8",
   authDomain: "nejdebrings-bananagrams.firebaseapp.com",
@@ -93,7 +87,7 @@ button{font-family:inherit;cursor:pointer;border:none;}
 /* Br\xE4de */
 .bf-boardwrap{flex:1;min-height:0;position:relative;overflow:hidden;background:
   radial-gradient(100% 60% at 50% 100%,rgba(0,0,0,.25),transparent);}
-.bf-board{position:absolute;top:0;left:0;transform-origin:0 0;will-change:transform;}
+.bf-board{position:absolute;top:0;left:0;transform-origin:0 0;}
 .bf-cellgrid{position:absolute;inset:0;background-size:var(--cell) var(--cell);
   background-image:linear-gradient(rgba(255,255,255,.05) 1px,transparent 1px),
                    linear-gradient(90deg,rgba(255,255,255,.05) 1px,transparent 1px);}
@@ -368,6 +362,12 @@ function hostStep(game, players) {
     game.deals[id] = game.deals[id].filter((d) => d.seq > (p.drawnSeq || 0));
   }
   const activeCount = activeIds.length;
+  const startIds = game.startIds || [];
+  const liveStarters = startIds.filter((id) => !(game.roster[id] && game.roster[id].rotten));
+  const allStartersPresent = liveStarters.length > 0 && liveStarters.every((id) => present(players[id]));
+  const inRound = game.phase === "playing" || game.phase === "verifying";
+  const paused = inRound && startIds.length > 0 && !allStartersPresent;
+  const threshold = liveStarters.length || activeCount;
   const dealTo = (id, letters) => {
     game.dealSeq[id] = (game.dealSeq[id] || 0) + 1;
     game.deals[id].push({ seq: game.dealSeq[id], letters });
@@ -379,8 +379,8 @@ function hostStep(game, players) {
     for (const q of reqs) {
       game.ackSeq[id] = q.seq;
       if (q.type === "peel") {
-        if (game.phase === "playing" && game.bag.length >= activeCount && activeCount > 0) {
-          for (const aid of activeIds) {
+        if (game.phase === "playing" && !paused && game.bag.length >= threshold && threshold > 0) {
+          for (const aid of liveStarters) {
             const t = game.bag.shift();
             if (t !== void 0) dealTo(aid, [t]);
           }
@@ -388,14 +388,14 @@ function hostStep(game, players) {
           game.event = { id: uid(), type: "skala", by: id, name: p.name, ts: now() };
         }
       } else if (q.type === "dump") {
-        if (game.phase === "playing" && game.bag.length >= 3 && q.letter) {
+        if (game.phase === "playing" && !paused && game.bag.length >= 3 && q.letter) {
           game.bag.push(q.letter);
           game.bag = shuffle(game.bag);
           dealTo(id, [game.bag.shift(), game.bag.shift(), game.bag.shift()]);
           game.event = { id: uid(), type: "dumpa", by: id, name: p.name, ts: now() };
         }
       } else if (q.type === "bananas") {
-        if (game.phase === "playing" && game.bag.length < activeCount && q.board) {
+        if (game.phase === "playing" && !paused && game.bag.length < threshold && q.board) {
           game.phase = "verifying";
           game.winnerId = id;
           game.verifyName = p.name;
@@ -429,10 +429,10 @@ function hostStep(game, players) {
       game.event = { id: uid(), type: "start", ts: now() };
     }
   } else if (game.phase === "verifying") {
-    const voters = activeIds.filter((id) => id !== game.winnerId);
+    const voters = liveStarters.filter((id) => id !== game.winnerId && present(players[id]));
     const votes = voters.map((id) => game.verdicts[id]).filter(Boolean);
     const anyRotten = votes.includes("rotten");
-    const allVoted = voters.length > 0 && votes.length === voters.length;
+    const allVoted = voters.length > 0 && votes.length === voters.length && allStartersPresent;
     if (anyRotten) {
       const board = game.verifyBoard;
       if (board && board.cells) {
@@ -453,7 +453,9 @@ function hostStep(game, players) {
     }
   }
   game.bagCount = game.bag.length;
-  game.activeCount = activeCount;
+  game.activeCount = inRound ? threshold : activeCount;
+  game.paused = paused;
+  game.missing = paused ? liveStarters.filter((id) => !present(players[id])).map((id) => game.roster[id] && game.roster[id].name || "?") : [];
   for (const id of Object.keys(game.roster)) game.roster[id].host = id === game.hostId;
   game.v = (game.v || 0) + 1;
   return { game, win };
@@ -481,7 +483,7 @@ function Tile({ letter, size = 40, selected, bad, onPointerDown, style }) {
     letter
   );
 }
-const GRID = 80, CELL = 42, CENTER = Math.floor(GRID / 2);
+const GRID = 40, CELL = 40, CENTER = Math.floor(GRID / 2);
 function Board({ placed, selected, onPlaceAt, onPickTile, viewRef }) {
   const wrapRef = useRef(null);
   const [view, setView] = useState({ x: 0, y: 0, scale: 1 });
@@ -773,6 +775,61 @@ function Results({ game, meId, lb, onAgain, onHome, amHost }) {
   const won = game.lastWinnerName;
   return /* @__PURE__ */ React.createElement("div", { className: "bf-ov" }, /* @__PURE__ */ React.createElement("div", { className: "bf-ovcard bf-scroll" }, /* @__PURE__ */ React.createElement("div", { style: { textAlign: "center" } }, /* @__PURE__ */ React.createElement("div", { style: { fontSize: 54 } }, "\u{1F34C}"), /* @__PURE__ */ React.createElement("div", { className: "bf-h1", style: { fontSize: 26 } }, "Toppbanan: ", won), /* @__PURE__ */ React.createElement("div", { className: "bf-mini", style: { marginTop: 4 } }, "Omg\xE5ngen \xE4r slut")), /* @__PURE__ */ React.createElement("div", { style: { fontWeight: 800, margin: "16px 0 4px" } }, "\u{1F3C6} Topplista"), /* @__PURE__ */ React.createElement(Leaderboard, { entries: lb }), /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: 8, marginTop: 16 } }, amHost && /* @__PURE__ */ React.createElement("button", { className: "bf-btn", style: { flex: 1 }, onClick: onAgain }, "Spela igen"), /* @__PURE__ */ React.createElement("button", { className: "bf-btn ghost", style: { flex: 1 }, onClick: onHome }, "Till start")), !amHost && /* @__PURE__ */ React.createElement("div", { className: "bf-mini", style: { textAlign: "center", marginTop: 10 } }, "V\xE4rden kan starta en ny omg\xE5ng.")));
 }
+class ErrorBoundary extends React.Component {
+  constructor(p) {
+    super(p);
+    this.state = { err: null };
+  }
+  static getDerivedStateFromError(err) {
+    return { err };
+  }
+  componentDidCatch(err, info) {
+    try {
+      console.error("Bananfl\xE4ta-fel:", err, info);
+    } catch (e) {
+    }
+  }
+  render() {
+    if (this.state.err) {
+      const msg = String(this.state.err && (this.state.err.stack || this.state.err.message) || this.state.err);
+      return /* @__PURE__ */ React.createElement("div", { style: {
+        position: "fixed",
+        inset: 0,
+        background: "#0f3b34",
+        color: "#f6efe0",
+        fontFamily: 'ui-rounded,"SF Pro Rounded",system-ui,sans-serif',
+        padding: "24px",
+        display: "flex",
+        flexDirection: "column",
+        gap: 14,
+        justifyContent: "center"
+      } }, /* @__PURE__ */ React.createElement("div", { style: { fontSize: 22, fontWeight: 800 } }, "Oj, n\xE5got kraschade"), /* @__PURE__ */ React.createElement("div", { style: { fontSize: 13, opacity: 0.85 } }, "Skicka g\xE4rna en sk\xE4rmdump av texten nedan s\xE5 kan felet fixas:"), /* @__PURE__ */ React.createElement("div", { style: {
+        fontSize: 12,
+        whiteSpace: "pre-wrap",
+        wordBreak: "break-word",
+        maxHeight: "45vh",
+        overflow: "auto",
+        background: "rgba(0,0,0,.3)",
+        padding: 12,
+        borderRadius: 10,
+        fontFamily: "monospace"
+      } }, msg), /* @__PURE__ */ React.createElement(
+        "button",
+        {
+          onClick: () => {
+            try {
+              location.reload();
+            } catch (e) {
+            }
+          },
+          style: { padding: 14, borderRadius: 12, border: "none", background: "#f4c430", color: "#222", fontWeight: 800, fontSize: 16 }
+        },
+        "Ladda om appen"
+      ));
+    }
+    return this.props.children;
+  }
+}
 function App() {
   const [screen, setScreen] = useState("home");
   const [mode, setMode] = useState(null);
@@ -821,8 +878,9 @@ function App() {
   const valid = useMemo(() => gridValid(placed, rack.length), [placed, rack.length]);
   const myActive = game ? game.activeCount || 0 : 1;
   const bagCount = game ? game.bagCount ?? 0 : soloBagRef.current ? soloBagRef.current.length : 0;
-  const canSkala = valid.ok && bagCount >= (mode === "solo" ? 1 : myActive) && game && game.phase === "playing";
-  const canBanan = valid.ok && bagCount < (mode === "solo" ? 1 : myActive) && game && game.phase === "playing";
+  const isPaused = !!(game && game.paused);
+  const canSkala = valid.ok && !isPaused && bagCount >= (mode === "solo" ? 1 : myActive) && game && game.phase === "playing";
+  const canBanan = valid.ok && !isPaused && bagCount < (mode === "solo" ? 1 : myActive) && game && game.phase === "playing";
   const tilesFromLetters = (letters) => letters.map((l) => ({ id: uid(), letter: l }));
   const addToRack = useCallback((letters) => {
     setRack((r) => [...r, ...tilesFromLetters(letters)]);
@@ -1354,7 +1412,7 @@ function App() {
       const r = el.getBoundingClientRect();
       viewRef.current.setView({ scale: 1, x: r.width / 2 - CENTER * CELL - CELL / 2, y: r.height / 2 - CENTER * CELL - CELL / 2 });
     }
-  } }, "Centrera")), /* @__PURE__ */ React.createElement("div", { className: "bf-actions" }, /* @__PURE__ */ React.createElement("button", { className: "bf-skala", disabled: !canSkala, onClick: onSkala }, "SKALA"), /* @__PURE__ */ React.createElement("button", { className: "bf-banan", disabled: !canBanan, onClick: onBanan }, "BANAN!"), /* @__PURE__ */ React.createElement("button", { className: "bf-dumpbtn", disabled: !dumpEnabled, onClick: onDumpa }, "DUMPA")), !valid.ok && rack.length === 0 && /* @__PURE__ */ React.createElement("div", { className: "bf-mini", style: { textAlign: "center", marginTop: 6, color: "var(--banan-mogen)" } }, valid.why), valid.ok && !canSkala && !canBanan && phase === "playing" && /* @__PURE__ */ React.createElement("div", { className: "bf-mini", style: { textAlign: "center", marginTop: 6 } }, "Klar! V\xE4ntar\u2026"))), flash && /* @__PURE__ */ React.createElement("div", { className: "bf-flash" }, /* @__PURE__ */ React.createElement("div", { className: "msg" }, flash)), phase === "countdown" && game && /* @__PURE__ */ React.createElement(Countdown, { endsAt: game.countdownEnd }), phase === "verifying" && game && mode === "online" && /* @__PURE__ */ React.createElement(VerifyOverlay, { game, meId, amWinner: game.winnerId === meId, onVote }), phase === "finished" && game && /* @__PURE__ */ React.createElement(
+  } }, "Centrera")), /* @__PURE__ */ React.createElement("div", { className: "bf-actions" }, /* @__PURE__ */ React.createElement("button", { className: "bf-skala", disabled: !canSkala, onClick: onSkala }, "SKALA"), /* @__PURE__ */ React.createElement("button", { className: "bf-banan", disabled: !canBanan, onClick: onBanan }, "BANAN!"), /* @__PURE__ */ React.createElement("button", { className: "bf-dumpbtn", disabled: !dumpEnabled, onClick: onDumpa }, "DUMPA")), !valid.ok && rack.length === 0 && /* @__PURE__ */ React.createElement("div", { className: "bf-mini", style: { textAlign: "center", marginTop: 6, color: "var(--banan-mogen)" } }, valid.why), valid.ok && !canSkala && !canBanan && !isPaused && phase === "playing" && /* @__PURE__ */ React.createElement("div", { className: "bf-mini", style: { textAlign: "center", marginTop: 6 } }, "Klar! V\xE4ntar\u2026"), isPaused && /* @__PURE__ */ React.createElement("div", { className: "bf-mini", style: { textAlign: "center", marginTop: 6, color: "var(--fara)", fontWeight: 700 } }, "\u23F8 Pausat \u2014 v\xE4ntar p\xE5 att ", game.missing && game.missing.join(", ") || "en spelare", " \xE5teransluter.", isHost && /* @__PURE__ */ React.createElement("div", { style: { marginTop: 8 } }, /* @__PURE__ */ React.createElement("button", { className: "bf-tool", onClick: playAgain }, "Avbryt omg\xE5ngen"))))), flash && /* @__PURE__ */ React.createElement("div", { className: "bf-flash" }, /* @__PURE__ */ React.createElement("div", { className: "msg" }, flash)), phase === "countdown" && game && /* @__PURE__ */ React.createElement(Countdown, { endsAt: game.countdownEnd }), phase === "verifying" && game && mode === "online" && /* @__PURE__ */ React.createElement(VerifyOverlay, { game, meId, amWinner: game.winnerId === meId, onVote }), phase === "finished" && game && /* @__PURE__ */ React.createElement(
     Results,
     {
       game,
@@ -1367,7 +1425,7 @@ function App() {
   ), showRules && /* @__PURE__ */ React.createElement(Rules, { onClose: () => setShowRules(false) }));
 }
 
-ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(App));
+ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(ErrorBoundary,null,React.createElement(App)));
 </script>
 </body>
 </html>
