@@ -415,7 +415,9 @@ function hostStep(game, players) {
       game.phase = "countdown";
       game.countdownEnd = now() + COUNTDOWN_MS;
       game.numPlayers = activeCount;
-      game.bag = shuffle(buildBag());
+      let bag = shuffle(buildBag());
+      if (game.shortMode && activeCount <= 3) bag = bag.slice(0, 72);
+      game.bag = bag;
       game.startIds = activeIds.slice();
     }
   } else if (game.phase === "countdown") {
@@ -543,7 +545,9 @@ function Board({ placed, selected, onPlaceAt, onPickTile, viewRef }) {
       return;
     }
     if (st.pan) {
-      setView((v) => ({ ...v, x: st.pan.vx + (e.clientX - st.pan.sx), y: st.pan.vy + (e.clientY - st.pan.sy) }));
+      const p = st.pan;
+      const nx = p.vx + (e.clientX - p.sx), ny = p.vy + (e.clientY - p.sy);
+      setView((v) => ({ ...v, x: nx, y: ny }));
     }
   }, []);
   const onUp = useCallback((e) => {
@@ -554,10 +558,13 @@ function Board({ placed, selected, onPlaceAt, onPickTile, viewRef }) {
     }
     if (st.drag) {
       if (st.drag.moved) {
-        const { r, c } = clientToCell(e.clientX, e.clientY);
-        onPickTile(st.drag.r, st.drag.c, r, c);
-      } else {
-        onPickTile(st.drag.r, st.drag.c, null, null);
+        const rect = wrapRef.current.getBoundingClientRect();
+        if (e.clientY > rect.bottom) {
+          onPickTile(st.drag.r, st.drag.c, null, null);
+        } else {
+          const { r, c } = clientToCell(e.clientX, e.clientY);
+          onPickTile(st.drag.r, st.drag.c, r, c);
+        }
       }
       st.drag = null;
       setGhost(null);
@@ -610,7 +617,7 @@ function Board({ placed, selected, onPlaceAt, onPickTile, viewRef }) {
       t.letter
     ))),
     /* @__PURE__ */ React.createElement("div", { className: "bf-zoom" }, /* @__PURE__ */ React.createElement("button", { onClick: () => zoom(1.2) }, "+"), /* @__PURE__ */ React.createElement("button", { onClick: () => zoom(1 / 1.2) }, "\u2212")),
-    placed.length === 0 && /* @__PURE__ */ React.createElement("div", { className: "bf-hint" }, "Tryck p\xE5 en bricka i hyllan, tryck sen h\xE4r f\xF6r att placera. Dra med ett finger f\xF6r att panorera."),
+    placed.length === 0 && /* @__PURE__ */ React.createElement("div", { className: "bf-hint" }, "Tryck p\xE5 en bricka i hyllan, tryck sen h\xE4r f\xF6r att placera. Dra en utlagd bricka f\xF6r att flytta den. Dra med ett finger p\xE5 tom yta f\xF6r att panorera."),
     ghost && /* @__PURE__ */ React.createElement("div", { className: "tile ghost", style: { left: ghost.x, top: ghost.y, width: CELL - 4, height: CELL - 4, fontSize: Math.round(CELL * 0.46) } }, ghost.letter)
   );
 }
@@ -748,10 +755,10 @@ function Rules({ onClose }) {
   const dist = Object.entries(DISTRIBUTION);
   return /* @__PURE__ */ React.createElement("div", { className: "bf-ov" }, /* @__PURE__ */ React.createElement("div", { className: "bf-ovcard bf-scroll" }, /* @__PURE__ */ React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center" } }, /* @__PURE__ */ React.createElement("div", { className: "bf-h1", style: { fontSize: 22 } }, "S\xE5 spelar du"), /* @__PURE__ */ React.createElement("button", { className: "bf-tool", style: { flex: "0 0 auto" }, onClick: onClose }, "St\xE4ng")), /* @__PURE__ */ React.createElement("ol", { style: { fontSize: 14, lineHeight: 1.5, paddingLeft: 18, marginTop: 10 } }, /* @__PURE__ */ React.createElement("li", null, "Alla markerar ", /* @__PURE__ */ React.createElement("b", null, "Redo"), ". N\xE4r alla \xE4r redo startar en gemensam nedr\xE4kning och brickorna delas ut samtidigt."), /* @__PURE__ */ React.createElement("li", null, "Bygg en sammanh\xE4ngande ordfl\xE4ta (v\xE5gr\xE4tt/lodr\xE4tt) av alla dina brickor."), /* @__PURE__ */ React.createElement("li", null, "Klar med alla brickor och klasen r\xE4cker? Tryck ", /* @__PURE__ */ React.createElement("b", { style: { color: "var(--skala)" } }, "SKALA"), " \u2014 d\xE5 drar ", /* @__PURE__ */ React.createElement("i", null, "alla"), " en ny bricka."), /* @__PURE__ */ React.createElement("li", null, "Sitter du fast p\xE5 en bokstav? V\xE4lj brickan och tryck ", /* @__PURE__ */ React.createElement("b", null, "DUMPA"), " \u2014 l\xE4gg tillbaka 1, dra 3 nya."), /* @__PURE__ */ React.createElement("li", null, "N\xE4r klasen har f\xE4rre brickor \xE4n antal spelare och du blir klar: tryck ", /* @__PURE__ */ React.createElement("b", { style: { color: "var(--banan-mogen)" } }, "BANAN!")), /* @__PURE__ */ React.createElement("li", null, "De andra granskar din fl\xE4ta. Fel ord \u2192 ", /* @__PURE__ */ React.createElement("b", null, "Rutten banan"), ", dina brickor \xE5ter i klasen och \xF6vriga spelar vidare. Allt r\xE4tt \u2192 du blir ", /* @__PURE__ */ React.createElement("b", null, "Toppbanan"), ".")), /* @__PURE__ */ React.createElement("div", { style: { fontWeight: 800, marginTop: 14, marginBottom: 6 } }, "Startbrickor"), /* @__PURE__ */ React.createElement("div", { className: "bf-mini" }, "2\u20134 spelare: 21 \xB7 5\u20136 spelare: 15 \xB7 7\u20138 spelare: 11 \xB7 patiens: alla 144"), /* @__PURE__ */ React.createElement("div", { style: { fontWeight: 800, marginTop: 14, marginBottom: 8 } }, "Bokstavsf\xF6rdelning (officiell svensk, ", TOTAL_TILES, " brickor)"), /* @__PURE__ */ React.createElement("div", { className: "bf-disttbl" }, dist.map(([l, n]) => /* @__PURE__ */ React.createElement("div", { key: l, className: VOWELS.has(l) ? "vow" : "" }, l, " = ", n))), /* @__PURE__ */ React.createElement("div", { className: "bf-mini", style: { marginTop: 8 } }, "Q, W och Z ing\xE5r inte i svenska utg\xE5van. Vokaler i gult.")));
 }
-function Lobby({ code, roster, meId, ready, onReady, onLeave, onShowRules, sharedOK, diag, isHost }) {
+function Lobby({ code, roster, meId, ready, onReady, onLeave, onShowRules, sharedOK, diag, isHost, shortMode, onToggleShort }) {
   const list = Object.entries(roster || {}).filter(([id, r]) => r.present);
   const allReady = list.length >= 2 && list.every(([id, r]) => r.ready);
-  return /* @__PURE__ */ React.createElement("div", { className: "bf-wrap bf-scroll", style: { padding: "18px 16px" } }, /* @__PURE__ */ React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 } }, /* @__PURE__ */ React.createElement("button", { className: "bf-tool", style: { flex: "0 0 auto" }, onClick: onLeave }, "\u2190 L\xE4mna"), /* @__PURE__ */ React.createElement("div", { className: "bf-banana-logo" }, "V\xE4ntrum"), /* @__PURE__ */ React.createElement("button", { className: "bf-tool", style: { flex: "0 0 auto" }, onClick: onShowRules }, "Regler")), /* @__PURE__ */ React.createElement("div", { className: "bf-card", style: { padding: 18, textAlign: "center", marginBottom: 14 } }, /* @__PURE__ */ React.createElement("div", { className: "bf-mini" }, "Rumskod \u2014 dela med dina medspelare"), /* @__PURE__ */ React.createElement("div", { style: { fontSize: 46, fontWeight: 900, letterSpacing: 8, color: "var(--banan)" } }, code)), /* @__PURE__ */ React.createElement("div", { className: "bf-card", style: { padding: 14, marginBottom: 14 } }, /* @__PURE__ */ React.createElement("div", { style: { fontWeight: 800, marginBottom: 8 } }, "Spelare (", list.length, "/", MAX_PLAYERS, ")"), list.map(([id, r]) => /* @__PURE__ */ React.createElement("div", { key: id, className: "bf-ready", style: { padding: "7px 2px", borderBottom: "1px solid rgba(255,255,255,.06)" } }, /* @__PURE__ */ React.createElement("span", { style: { flex: 1 } }, r.name, id === meId ? " (du)" : "", r.host ? " \u{1F451}" : ""), /* @__PURE__ */ React.createElement("span", { style: { color: r.ready ? "var(--skala)" : "var(--dim)", fontWeight: 800, fontSize: 13 } }, r.ready ? "\u2713 Redo" : "v\xE4ntar"))), list.length < 2 && /* @__PURE__ */ React.createElement("div", { className: "bf-mini", style: { marginTop: 8 } }, "Minst 2 spelare beh\xF6vs f\xF6r att starta.")), /* @__PURE__ */ React.createElement(
+  return /* @__PURE__ */ React.createElement("div", { className: "bf-wrap bf-scroll", style: { padding: "18px 16px" } }, /* @__PURE__ */ React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 } }, /* @__PURE__ */ React.createElement("button", { className: "bf-tool", style: { flex: "0 0 auto" }, onClick: onLeave }, "\u2190 L\xE4mna"), /* @__PURE__ */ React.createElement("div", { className: "bf-banana-logo" }, "V\xE4ntrum"), /* @__PURE__ */ React.createElement("button", { className: "bf-tool", style: { flex: "0 0 auto" }, onClick: onShowRules }, "Regler")), /* @__PURE__ */ React.createElement("div", { className: "bf-card", style: { padding: 18, textAlign: "center", marginBottom: 14 } }, /* @__PURE__ */ React.createElement("div", { className: "bf-mini" }, "Rumskod \u2014 dela med dina medspelare"), /* @__PURE__ */ React.createElement("div", { style: { fontSize: 46, fontWeight: 900, letterSpacing: 8, color: "var(--banan)" } }, code)), /* @__PURE__ */ React.createElement("div", { className: "bf-card", style: { padding: 14, marginBottom: 14 } }, /* @__PURE__ */ React.createElement("div", { style: { fontWeight: 800, marginBottom: 8 } }, "Spelare (", list.length, "/", MAX_PLAYERS, ")"), list.map(([id, r]) => /* @__PURE__ */ React.createElement("div", { key: id, className: "bf-ready", style: { padding: "7px 2px", borderBottom: "1px solid rgba(255,255,255,.06)" } }, /* @__PURE__ */ React.createElement("span", { style: { flex: 1 } }, r.name, id === meId ? " (du)" : "", r.host ? " \u{1F451}" : ""), /* @__PURE__ */ React.createElement("span", { style: { color: r.ready ? "var(--skala)" : "var(--dim)", fontWeight: 800, fontSize: 13 } }, r.ready ? "\u2713 Redo" : "v\xE4ntar"))), list.length < 2 && /* @__PURE__ */ React.createElement("div", { className: "bf-mini", style: { marginTop: 8 } }, "Minst 2 spelare beh\xF6vs f\xF6r att starta.")), isHost ? /* @__PURE__ */ React.createElement("div", { className: "bf-card", style: { padding: 14, marginBottom: 14, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 } }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("div", { style: { fontWeight: 800 } }, "Kort spel"), /* @__PURE__ */ React.createElement("div", { className: "bf-mini" }, "72 brickor i st\xE4llet f\xF6r 144 \u2014 snabbare runda (f\xF6r 2\u20133 spelare)")), /* @__PURE__ */ React.createElement("button", { className: "bf-tool", style: { flex: "0 0 auto", minWidth: 56, background: shortMode ? "var(--skala)" : void 0, color: shortMode ? "#10301a" : void 0, fontWeight: 800 }, onClick: onToggleShort }, shortMode ? "P\xC5" : "AV")) : shortMode && /* @__PURE__ */ React.createElement("div", { className: "bf-mini", style: { textAlign: "center", marginBottom: 14 } }, "Kort spel (72 brickor)"), /* @__PURE__ */ React.createElement(
     "button",
     {
       className: "bf-btn",
@@ -1277,6 +1284,11 @@ function App() {
     setReady(nv);
     if (mode === "online") publishPlayer({ ready: nv });
   };
+  const toggleShort = () => {
+    if (!hostGameRef.current) return;
+    hostGameRef.current.shortMode = !hostGameRef.current.shortMode;
+    hostRecomputeRef.current();
+  };
   const onSkala = () => {
     if (!canSkala) return;
     if (mode === "solo") soloPeel();
@@ -1386,6 +1398,8 @@ function App() {
         sharedOK: fbOk,
         diag,
         isHost,
+        shortMode: !!(game && game.shortMode),
+        onToggleShort: toggleShort,
         onReady,
         onLeave: leaveRoom,
         onShowRules: () => setShowRules(true)
@@ -1406,7 +1420,7 @@ function App() {
       selected: selected && selected.from === "rack" && selected.id === t.id,
       onPointerDown: () => selectRack(t)
     }
-  ))), /* @__PURE__ */ React.createElement("div", { className: "bf-toolrow" }, /* @__PURE__ */ React.createElement("button", { className: "bf-tool", onClick: shuffleRack }, "Blanda hylla"), /* @__PURE__ */ React.createElement("button", { className: "bf-tool", onClick: recallAll }, "Samla brickor"), /* @__PURE__ */ React.createElement("button", { className: "bf-tool", onClick: () => {
+  ))), /* @__PURE__ */ React.createElement("div", { className: "bf-toolrow" }, /* @__PURE__ */ React.createElement("button", { className: "bf-tool", onClick: shuffleRack }, "Blanda hylla"), /* @__PURE__ */ React.createElement("button", { className: "bf-tool", onClick: () => {
     if (viewRef.current.setView) {
       const el = document.querySelector(".bf-boardwrap");
       const r = el.getBoundingClientRect();
@@ -1425,7 +1439,7 @@ function App() {
   ), showRules && /* @__PURE__ */ React.createElement(Rules, { onClose: () => setShowRules(false) }));
 }
 
-ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(ErrorBoundary,null,React.createElement(App)));
+ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(ErrorBoundary,null,React.createElement(App)));
 </script>
 </body>
 </html>
