@@ -9,7 +9,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes"/>
 <meta name="theme-color" content="#0f3b34"/>
 <title>Bananfläta</title>
-<!-- build-1782310200125 -->
+<!-- build-1785098661056 -->
 <style>html,body{margin:0;padding:0;height:100%;background:#0f3b34;overscroll-behavior:none;}#root{height:100%;}</style>
 <script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js" crossorigin></script>
 <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js" crossorigin></script>
@@ -26,7 +26,7 @@ window.__FIREBASE_CONFIG__ = {
   appId: "1:911449650387:web:f3791f8fc7c583cdc1d026",
   measurementId: "G-1MFKVZCBMH"
 };
-window.__BUILD__="build-1782310200125";
+window.__BUILD__="build-1785098661056";
 (function(){try{var B=window.__BUILD__;fetch(location.pathname+"?_="+Date.now(),{cache:"no-store"}).then(function(r){return r.text();}).then(function(t){var m=t.match(/__BUILD__="(build-\d+)"/);if(m&&m[1]!==B){var k="bf_r_"+m[1];if(!sessionStorage.getItem(k)){sessionStorage.setItem(k,"1");location.replace(location.pathname+"?b="+m[1]);return;}}if(location.search){try{history.replaceState(null,"",location.pathname);}catch(e){}}}).catch(function(){});}catch(e){}})();
 </script>
 </head>
@@ -104,8 +104,9 @@ button{font-family:inherit;cursor:pointer;border:none;}
 
 /* Hylla + knappar */
 .bf-dock{padding:8px 10px calc(8px + env(safe-area-inset-bottom));background:linear-gradient(180deg,transparent,rgba(0,0,0,.32));}
-.bf-rack{display:flex;gap:6px;overflow-x:auto;padding:6px 2px;min-height:54px;align-items:center;touch-action:pan-x;}
-.bf-rack.empty{justify-content:center;color:var(--dim);font-weight:700;font-size:13px;}
+.bf-rack{display:flex;flex-direction:column;gap:6px;padding:6px 2px;min-height:54px;justify-content:center;}
+.bf-rack.empty{justify-content:center;color:var(--dim);font-weight:700;font-size:13px;text-align:center;}
+.bf-rack-row{display:flex;gap:6px;justify-content:center;align-items:center;flex-wrap:nowrap;overflow-x:auto;touch-action:pan-x;}
 .bf-toolrow{display:flex;gap:6px;margin-top:6px;}
 .bf-tool{flex:1;border-radius:11px;background:rgba(255,255,255,.08);color:var(--kram);font-weight:800;font-size:12px;padding:9px 4px;border:1px solid rgba(255,255,255,.1);}
 .bf-tool:active{background:rgba(255,255,255,.16);}
@@ -497,6 +498,49 @@ function Tile({ letter, size = 40, selected, bad, onPointerDown, style }) {
       style: { width: size, height: size, fontSize: Math.round(size * 0.46), ...style }
     },
     letter
+  );
+}
+const RACK_GAP = 6, RACK_IDEAL = 46, RACK_MIN = 28;
+function Rack({ tiles, selected, onSelect }) {
+  const wrapRef = useRef(null);
+  const [width, setWidth] = useState(0);
+  useEffect(() => {
+    const el = wrapRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver((entries) => {
+      const w = entries[0] && entries[0].contentRect.width;
+      if (w) setWidth(w);
+    });
+    ro.observe(el);
+    setWidth(el.getBoundingClientRect().width);
+    return () => ro.disconnect();
+  }, []);
+  const rows = useMemo(() => {
+    const n = tiles.length;
+    if (n === 0) return { list: [], size: RACK_IDEAL };
+    if (!width) return { list: [tiles], size: RACK_IDEAL };
+    const perRowIdeal = Math.max(1, Math.floor((width + RACK_GAP) / (RACK_IDEAL + RACK_GAP)));
+    if (n <= perRowIdeal) return { list: [tiles], size: RACK_IDEAL };
+    const perRow = Math.ceil(n / 2);
+    const size = Math.max(RACK_MIN, Math.min(RACK_IDEAL, Math.floor((width - (perRow - 1) * RACK_GAP) / perRow)));
+    return { list: [tiles.slice(0, perRow), tiles.slice(perRow)], size };
+  }, [tiles, width]);
+  return /* @__PURE__ */ React.createElement(
+    "div",
+    { ref: wrapRef, className: "bf-rack" + (tiles.length === 0 ? " empty" : "") },
+    tiles.length === 0 ? "Hyllan \xE4r tom — bygg klart din fl\xE4ta!" : rows.list.map(
+      (row, i) => /* @__PURE__ */ React.createElement(
+        "div",
+        { key: i, className: "bf-rack-row" },
+        row.map((t) => /* @__PURE__ */ React.createElement(Tile, {
+          key: t.id,
+          letter: t.letter,
+          size: rows.size,
+          selected: selected && selected.from === "rack" && selected.id === t.id,
+          onPointerDown: () => onSelect(t)
+        }))
+      )
+    )
   );
 }
 const GRID = 40, CELL = 40, CENTER = Math.floor(GRID / 2);
@@ -1456,16 +1500,7 @@ function App() {
   const others = Object.entries(roster).filter(([id, r]) => r.present);
   const meId = meRef.current.id;
   const dumpEnabled = !!selected && bagCount >= 3 && phase === "playing";
-  return /* @__PURE__ */ React.createElement("div", { className: "bf-root" }, /* @__PURE__ */ React.createElement("style", null, CSS), /* @__PURE__ */ React.createElement("div", { className: "bf-wrap" }, /* @__PURE__ */ React.createElement("div", { className: "bf-top" }, /* @__PURE__ */ React.createElement("button", { className: "bf-tool", style: { flex: "0 0 auto", padding: "6px 10px" }, onClick: leaveRoom }, "\u2190"), /* @__PURE__ */ React.createElement("div", { className: "bf-pill" }, "\u{1F34C} Klasen: ", /* @__PURE__ */ React.createElement("b", null, bagCount)), /* @__PURE__ */ React.createElement("div", { className: "bf-pill", style: { marginLeft: "auto" } }, "Hylla: ", /* @__PURE__ */ React.createElement("b", null, rack.length)), /* @__PURE__ */ React.createElement("button", { className: "bf-tool", style: { flex: "0 0 auto", padding: "6px 10px" }, onClick: () => setShowRules(true) }, "?")), mode === "online" && /* @__PURE__ */ React.createElement("div", { className: "bf-players" }, others.map(([id, r]) => /* @__PURE__ */ React.createElement("div", { key: id, className: "bf-pcard" + (id === meId ? " you" : "") + (r.finished ? " done" : "") + (r.rotten ? " rutten" : "") }, /* @__PURE__ */ React.createElement("div", { className: "bf-pname" }, r.name, id === meId ? " (du)" : ""), /* @__PURE__ */ React.createElement("div", { className: "bf-pcount" + (r.rotten ? " dim" : "") }, r.rotten ? "ut" : r.finished ? "\u2713" : r.tileCount)))), /* @__PURE__ */ React.createElement(Board, { placed, selected, onPlaceAt: placeAt, onPickTile: pickTile, viewRef }), /* @__PURE__ */ React.createElement("div", { className: "bf-dock" }, /* @__PURE__ */ React.createElement("div", { className: "bf-rack" + (rack.length === 0 ? " empty" : "") }, rack.length === 0 ? "Hyllan \xE4r tom \u2014 bygg klart din fl\xE4ta!" : rack.map((t) => /* @__PURE__ */ React.createElement(
-    Tile,
-    {
-      key: t.id,
-      letter: t.letter,
-      size: 46,
-      selected: selected && selected.from === "rack" && selected.id === t.id,
-      onPointerDown: () => selectRack(t)
-    }
-  ))), /* @__PURE__ */ React.createElement("div", { className: "bf-toolrow" }, /* @__PURE__ */ React.createElement("button", { className: "bf-tool", onClick: shuffleRack }, "Blanda hylla"), /* @__PURE__ */ React.createElement("button", { className: "bf-tool", onClick: () => {
+  return /* @__PURE__ */ React.createElement("div", { className: "bf-root" }, /* @__PURE__ */ React.createElement("style", null, CSS), /* @__PURE__ */ React.createElement("div", { className: "bf-wrap" }, /* @__PURE__ */ React.createElement("div", { className: "bf-top" }, /* @__PURE__ */ React.createElement("button", { className: "bf-tool", style: { flex: "0 0 auto", padding: "6px 10px" }, onClick: leaveRoom }, "\u2190"), /* @__PURE__ */ React.createElement("div", { className: "bf-pill" }, "\u{1F34C} Klasen: ", /* @__PURE__ */ React.createElement("b", null, bagCount)), /* @__PURE__ */ React.createElement("div", { className: "bf-pill", style: { marginLeft: "auto" } }, "Hylla: ", /* @__PURE__ */ React.createElement("b", null, rack.length)), /* @__PURE__ */ React.createElement("button", { className: "bf-tool", style: { flex: "0 0 auto", padding: "6px 10px" }, onClick: () => setShowRules(true) }, "?")), mode === "online" && /* @__PURE__ */ React.createElement("div", { className: "bf-players" }, others.map(([id, r]) => /* @__PURE__ */ React.createElement("div", { key: id, className: "bf-pcard" + (id === meId ? " you" : "") + (r.finished ? " done" : "") + (r.rotten ? " rutten" : "") }, /* @__PURE__ */ React.createElement("div", { className: "bf-pname" }, r.name, id === meId ? " (du)" : ""), /* @__PURE__ */ React.createElement("div", { className: "bf-pcount" + (r.rotten ? " dim" : "") }, r.rotten ? "ut" : r.finished ? "\u2713" : r.tileCount)))), /* @__PURE__ */ React.createElement(Board, { placed, selected, onPlaceAt: placeAt, onPickTile: pickTile, viewRef }), /* @__PURE__ */ React.createElement("div", { className: "bf-dock" }, /* @__PURE__ */ React.createElement(Rack, { tiles: rack, selected, onSelect: selectRack }), /* @__PURE__ */ React.createElement("div", { className: "bf-toolrow" }, /* @__PURE__ */ React.createElement("button", { className: "bf-tool", onClick: shuffleRack }, "Blanda hylla"), /* @__PURE__ */ React.createElement("button", { className: "bf-tool", onClick: () => {
     if (viewRef.current.setView) {
       const el = document.querySelector(".bf-boardwrap");
       const r = el.getBoundingClientRect();
